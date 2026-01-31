@@ -1,0 +1,19 @@
+# Python scraping ve cevap çıkarma dosyaları
+*.py
+__pycache__/
+.env
+requirements.txt
+
+# JSON veri dosyaları (quiz-app dışındakiler)
+questions.json
+yds_all_questions.json
+yds_questions/
+yds_questions_gpt/
+
+# Debug ve test dosyaları
+after_submit.html
+debug_page.html
+
+# Git
+.git/
+.gitignore

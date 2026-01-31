@@ -1,0 +1,225 @@
+{
+  "total_questions": 2716,
+  "processed_success": 2716,
+  "has_answer": 2716,
+  "has_explanation": 2716,
+  "has_correction": 2554,
+  "answer_distribution": {
+    "C": 617,
+    "B": 578,
+    "E": 448,
+    "D": 605,
+    "A": 467,
+    "A/B/C/D/E": 1
+  },
+  "categories": {
+    "Cümle Tamamlama": {
+      "total": 300,
+      "processed": 300,
+      "has_answer": 300,
+      "has_explanation": 300,
+      "text_corrected": 265,
+      "answer_dist": {
+        "C": 67,
+        "B": 72,
+        "E": 48,
+        "D": 66,
+        "A": 47
+      },
+      "issues": []
+    },
+    "Diyalog": {
+      "total": 164,
+      "processed": 164,
+      "has_answer": 164,
+      "has_explanation": 164,
+      "text_corrected": 76,
+      "answer_dist": {
+        "E": 22,
+        "A": 20,
+        "B": 42,
+        "D": 38,
+        "C": 42
+      },
+      "issues": []
+    },
+    "Durum": {
+      "total": 204,
+      "processed": 204,
+      "has_answer": 204,
+      "has_explanation": 204,
+      "text_corrected": 204,
+      "answer_dist": {
+        "B": 36,
+        "C": 47,
+        "A": 44,
+        "D": 44,
+        "E": 33
+      },
+      "issues": []
+    },
+    "Eş Anlam": {
+      "total": 248,
+      "processed": 248,
+      "has_answer": 248,
+      "has_explanation": 248,
+      "text_corrected": 220,
+      "answer_dist": {
+        "C": 55,
+        "D": 50,
+        "E": 58,
+        "B": 52,
+        "A": 33
+      },
+      "issues": []
+    },
+    "İlgisiz Cümleyi Bulma": {
+      "total": 300,
+      "processed": 300,
+      "has_answer": 300,
+      "has_explanation": 300,
+      "text_corrected": 300,
+      "answer_dist": {
+        "C": 90,
+        "D": 87,
+        "E": 46,
+        "A": 22,
+        "B": 55
+      },
+      "issues": []
+    },
+    "Kelime Soruları": {
+      "total": 300,
+      "processed": 300,
+      "has_answer": 300,
+      "has_explanation": 300,
+      "text_corrected": 300,
+      "answer_dist": {
+        "D": 67,
+        "E": 57,
+        "B": 63,
+        "A": 57,
+        "C": 56
+      },
+      "issues": []
+    },
+    "Okuma Soruları": {
+      "total": 300,
+      "processed": 300,
+      "has_answer": 300,
+      "has_explanation": 300,
+      "text_corrected": 296,
+      "answer_dist": {
+        "C": 70,
+        "A": 54,
+        "B": 63,
+        "D": 62,
+        "E": 51
+      },
+      "issues": []
+    },
+    "Paragraf Doldurma": {
+      "total": 300,
+      "processed": 300,
+      "has_answer": 300,
+      "has_explanation": 300,
+      "text_corrected": 300,
+      "answer_dist": {
+        "D": 74,
+        "B": 59,
+        "C": 68,
+        "E": 46,
+        "A": 53
+      },
+      "issues": []
+    },
+    "Phrasal Verbs Prepositions": {
+      "total": 300,
+      "processed": 300,
+      "has_answer": 300,
+      "has_explanation": 300,
+      "text_corrected": 299,
+      "answer_dist": {
+        "C": 48,
+        "B": 63,
+        "E": 39,
+        "A": 101,
+        "D": 48,
+        "A/B/C/D/E": 1
+      },
+      "issues": [
+        "Phrasal Verbs Prepositions - Soru 155: Geçersiz cevap 'A/B/C/D/E'"
+      ]
+    },
+    "Çeviri Soruları": {
+      "total": 300,
+      "processed": 300,
+      "has_answer": 300,
+      "has_explanation": 300,
+      "text_corrected": 294,
+      "answer_dist": {
+        "C": 74,
+        "E": 48,
+        "B": 73,
+        "D": 69,
+        "A": 36
+      },
+      "issues": []
+    }
+  },
+  "sample_corrections": [
+    {
+      "category": "Cümle Tamamlama",
+      "original": "- The 1500 meters gold medallist, ----, denied\n\nhaving taken any banned drug.",
+      "corrected": "The 1500 meters gold medallist, ----, denied having taken any banned drug."
+    },
+    {
+      "category": "Cümle Tamamlama",
+      "original": "- ---- that have dominated strategic and\n\ntactical thinking ever since.",
+      "corrected": "---- that have dominated strategic and tactical thinking ever since."
+    },
+    {
+      "category": "Cümle Tamamlama",
+      "original": "- It is true that wealth won't make a man\n\nvirtuous ----.",
+      "corrected": "It is true that wealth won't make a man virtuous ----."
+    },
+    {
+      "category": "Cümle Tamamlama",
+      "original": "- In some ancient societies where statues\n\nwere worshipped, ----- they would leave\n\nthem in fields to be killed by wild animals.",
+      "corrected": "In some ancient societies where statues were worshipped, ----- they would leave them in fields to be killed by wild animals."
+    },
+    {
+      "category": "Cümle Tamamlama",
+      "original": "- My brother always complains ----.",
+      "corrected": "My brother always complains ----."
+    },
+    {
+      "category": "Cümle Tamamlama",
+      "original": "- In Italy sales of poultry have fallen by 70%\n\n----.",
+      "corrected": "In Italy, sales of poultry have fallen by 70%."
+    },
+    {
+      "category": "Cümle Tamamlama",
+      "original": "- A man's voice is deeper than a woman's ----.",
+      "corrected": "A man's voice is deeper than a woman's ----."
+    },
+    {
+      "category": "Cümle Tamamlama",
+      "original": "- Those who are overweight or obese should\n\naim for a healthy weight ----.",
+      "corrected": "Those who are overweight or obese should aim for a healthy weight ----."
+    },
+    {
+      "category": "Cümle Tamamlama",
+      "original": "- Sometimes we can learn ----- rather than by\n\nbeing in that position.",
+      "corrected": "Sometimes we can learn ----- rather than by being in that position."
+    },
+    {
+      "category": "Cümle Tamamlama",
+      "original": "- Until the Panama Canal was finished in\n\n1914, ----.",
+      "corrected": "Until the Panama Canal was finished in 1914, ----."
+    }
+  ],
+  "issues": [
+    "Phrasal Verbs Prepositions - Soru 155: Geçersiz cevap 'A/B/C/D/E'"
+  ]
+}

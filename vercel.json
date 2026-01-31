@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "outputDirectory": "quiz-app",
+  "builds": [
+    {
+      "src": "quiz-app/**/*",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/quiz-app/$1"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    }
+  ]
+}

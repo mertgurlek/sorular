@@ -1,0 +1,68 @@
+{
+  "processed_at": "2026-01-30T17:07:30.586352",
+  "total_processed": 2716,
+  "total_success": 2716,
+  "elapsed_seconds": 2752.12958,
+  "categories": [
+    {
+      "name": "İlgisiz Cümleyi Bulma",
+      "file": "gpt_yds_ilgisiz_cümleyi_bulma.json",
+      "processed": 300,
+      "success": 300
+    },
+    {
+      "name": "Çeviri Soruları",
+      "file": "gpt_yds_çeviri_soruları.json",
+      "processed": 300,
+      "success": 300
+    },
+    {
+      "name": "Cümle Tamamlama",
+      "file": "gpt_yds_cümle_tamamlama.json",
+      "processed": 300,
+      "success": 300
+    },
+    {
+      "name": "Diyalog",
+      "file": "gpt_yds_diyalog.json",
+      "processed": 164,
+      "success": 164
+    },
+    {
+      "name": "Durum",
+      "file": "gpt_yds_durum.json",
+      "processed": 204,
+      "success": 204
+    },
+    {
+      "name": "Eş Anlam",
+      "file": "gpt_yds_eş_anlam.json",
+      "processed": 248,
+      "success": 248
+    },
+    {
+      "name": "Paragraf Doldurma",
+      "file": "gpt_yds_paragraf_doldurma.json",
+      "processed": 300,
+      "success": 300
+    },
+    {
+      "name": "Phrasal Verbs Prepositions",
+      "file": "gpt_yds_phrasal_verbs_prepositions.json",
+      "processed": 300,
+      "success": 300
+    },
+    {
+      "name": "Kelime Soruları",
+      "file": "gpt_yds_kelime_soruları.json",
+      "processed": 300,
+      "success": 300
+    },
+    {
+      "name": "Okuma Soruları",
+      "file": "gpt_yds_okuma_soruları.json",
+      "processed": 300,
+      "success": 300
+    }
+  ]
+}
