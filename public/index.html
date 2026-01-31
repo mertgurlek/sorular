@@ -128,6 +128,7 @@
         <!-- Navigation Tabs -->
         <nav class="tabs">
             <button class="tab active" data-tab="quiz">📝 Quiz</button>
+            <button class="tab" data-tab="challenge">🏆 Challenge</button>
             <button class="tab" data-tab="exam">📋 Sınav</button>
             <button class="tab" data-tab="flashcards">🃏 Flashcard</button>
             <button class="tab" data-tab="favorites">⭐ Favoriler</button>
@@ -236,6 +237,187 @@
                     </div>
                 </div>
                 <button id="restartQuiz" class="btn btn-primary btn-large">Yeni Quiz Başlat</button>
+            </div>
+        </section>
+
+        <!-- Challenge Tab -->
+        <section id="challenge-tab" class="tab-content">
+            <!-- Challenge Menu -->
+            <div id="challenge-menu" class="card">
+                <h2>🏆 Çok Oyunculu Challenge</h2>
+                <p class="challenge-description">Arkadaşlarınla aynı anda aynı soruları çöz, yarış!</p>
+                
+                <div class="challenge-actions">
+                    <button id="createRoomBtn" class="btn btn-primary btn-large">
+                        <span>➕</span> Oda Oluştur
+                    </button>
+                    <button id="joinRoomBtn" class="btn btn-secondary btn-large">
+                        <span>🚪</span> Odaya Katıl
+                    </button>
+                </div>
+
+                <div class="challenge-history-section">
+                    <h3>📜 Geçmiş Yarışmalarım</h3>
+                    <div id="challengeHistory" class="challenge-history-list">
+                        <p class="empty-state">Henüz yarışma geçmişi yok.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Create Room Form -->
+            <div id="create-room-form" class="card hidden">
+                <div class="card-header">
+                    <h2>➕ Yeni Oda Oluştur</h2>
+                    <button id="backToMenuFromCreate" class="btn btn-secondary btn-small">← Geri</button>
+                </div>
+                
+                <div class="form-group">
+                    <label for="roomName">Oda Adı</label>
+                    <input type="text" id="roomName" placeholder="Örn: YDS Çalışma Grubu" maxlength="50">
+                </div>
+
+                <div class="form-group">
+                    <label>Soru Kategorileri</label>
+                    <div id="challengeCategoryGrid" class="category-grid challenge-categories">
+                        <!-- Categories will be loaded here -->
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="challengeQuestionCount">Soru Sayısı</label>
+                    <select id="challengeQuestionCount">
+                        <option value="5">5 Soru</option>
+                        <option value="10" selected>10 Soru</option>
+                        <option value="15">15 Soru</option>
+                        <option value="20">20 Soru</option>
+                        <option value="30">30 Soru</option>
+                    </select>
+                </div>
+
+                <button id="createRoomSubmit" class="btn btn-primary btn-large" disabled>Oda Oluştur</button>
+            </div>
+
+            <!-- Join Room Form -->
+            <div id="join-room-form" class="card hidden">
+                <div class="card-header">
+                    <h2>🚪 Odaya Katıl</h2>
+                    <button id="backToMenuFromJoin" class="btn btn-secondary btn-small">← Geri</button>
+                </div>
+                
+                <div class="form-group">
+                    <label for="joinRoomCode">Oda Kodu</label>
+                    <input type="text" id="joinRoomCode" placeholder="Örn: ABC123" maxlength="6" style="text-transform: uppercase;">
+                </div>
+
+                <div id="joinRoomError" class="auth-error"></div>
+                <button id="joinRoomSubmit" class="btn btn-primary btn-large">Katıl</button>
+            </div>
+
+            <!-- Waiting Room -->
+            <div id="waiting-room" class="card hidden">
+                <div class="waiting-room-header">
+                    <div>
+                        <h2 id="waitingRoomName">Oda Adı</h2>
+                        <div class="room-code-display">
+                            <span>Oda Kodu:</span>
+                            <span id="waitingRoomCode" class="room-code">ABC123</span>
+                            <button id="copyRoomCode" class="btn btn-small btn-secondary" title="Kopyala">📋</button>
+                        </div>
+                    </div>
+                    <button id="leaveRoom" class="btn btn-danger btn-small">Odadan Ayrıl</button>
+                </div>
+
+                <div class="waiting-room-info">
+                    <div class="info-card">
+                        <span class="info-icon">📝</span>
+                        <span id="waitingQuestionCount">10</span> Soru
+                    </div>
+                    <div class="info-card">
+                        <span class="info-icon">📚</span>
+                        <span id="waitingCategories">Kategoriler</span>
+                    </div>
+                </div>
+
+                <div class="participants-section">
+                    <h3>👥 Katılımcılar (<span id="participantCount">0</span>)</h3>
+                    <div id="participantsList" class="participants-list">
+                        <!-- Participants will be listed here -->
+                    </div>
+                </div>
+
+                <div id="adminControls" class="admin-controls hidden">
+                    <p class="admin-hint">Tüm katılımcılar hazır olduğunda başlatabilirsiniz.</p>
+                    <button id="startChallengeBtn" class="btn btn-primary btn-large" disabled>🚀 Yarışmayı Başlat</button>
+                </div>
+
+                <div id="participantControls" class="participant-controls hidden">
+                    <button id="toggleReadyBtn" class="btn btn-secondary btn-large">✋ Hazırım</button>
+                    <p class="waiting-hint">Admin yarışmayı başlatana kadar bekleyin...</p>
+                </div>
+            </div>
+
+            <!-- Challenge Game Area -->
+            <div id="challenge-game" class="card hidden">
+                <div class="challenge-game-header">
+                    <div class="challenge-progress">
+                        <span>Soru <span id="challengeCurrentQ">1</span> / <span id="challengeTotalQ">10</span></span>
+                    </div>
+                    <div class="challenge-room-info">
+                        <span id="challengeRoomCodeDisplay" class="room-code-small">ABC123</span>
+                    </div>
+                    <div id="challengeAdminGameControls" class="hidden">
+                        <button id="endChallengeEarly" class="btn btn-danger btn-small">Bitir</button>
+                    </div>
+                </div>
+
+                <div class="challenge-participants-bar">
+                    <div id="challengeParticipantsStatus" class="participants-status">
+                        <!-- Participant avatars and status -->
+                    </div>
+                </div>
+
+                <div id="challengeQuestionContainer" class="question-container">
+                    <p id="challengeQuestionText" class="question-text"></p>
+                    <div id="challengeOptionsContainer" class="options-container"></div>
+                </div>
+
+                <div id="challengeFeedback" class="challenge-feedback hidden">
+                    <div id="challengeAnswersReveal" class="answers-reveal">
+                        <!-- Who answered what -->
+                    </div>
+                    <button id="challengeNextBtn" class="btn btn-primary hidden">Sonraki Soru →</button>
+                </div>
+
+                <div id="challengeWaitingOthers" class="waiting-others hidden">
+                    <div class="waiting-spinner"></div>
+                    <p>Diğer oyuncular cevaplıyor...</p>
+                    <div id="answeredCount">0 / 0 cevapladı</div>
+                </div>
+            </div>
+
+            <!-- Challenge Results -->
+            <div id="challenge-results" class="card hidden">
+                <h2>🏆 Yarışma Sonuçları</h2>
+                
+                <div id="challengeWinner" class="challenge-winner">
+                    <!-- Winner display -->
+                </div>
+
+                <div id="challengeLeaderboard" class="challenge-leaderboard">
+                    <!-- Leaderboard -->
+                </div>
+
+                <div class="challenge-category-comparison">
+                    <h3>📊 Kategori Bazlı Karşılaştırma</h3>
+                    <div id="challengeCategoryStats" class="category-comparison-grid">
+                        <!-- Category stats per player -->
+                    </div>
+                </div>
+
+                <div class="challenge-result-actions">
+                    <button id="viewChallengeDetails" class="btn btn-secondary">📋 Detaylı Sonuçlar</button>
+                    <button id="backToChallengeMenu" class="btn btn-primary">🏠 Ana Menü</button>
+                </div>
             </div>
         </section>
 

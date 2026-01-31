@@ -46,3 +46,13 @@
   from = "/api/init-db"
   to = "/.netlify/functions/init-db"
   status = 200
+
+[[redirects]]
+  from = "/api/rooms/*"
+  to = "/.netlify/functions/rooms/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/api/rooms"
+  to = "/.netlify/functions/rooms"
+  status = 200
