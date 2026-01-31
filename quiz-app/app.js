@@ -1,7 +1,9 @@
 // Quiz App - Main JavaScript
 
 // API Configuration
-const API_URL = 'http://localhost:3001/api';
+const API_URL = window.location.hostname === 'localhost' 
+    ? 'http://localhost:3001/api' 
+    : '/api';
 
 // Current User State
 let currentUser = null;
