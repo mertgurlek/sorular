@@ -1,0 +1,13 @@
+{
+  "name": "YDS Soru Çalışma",
+  "short_name": "YDS Quiz",
+  "description": "YDS sınavına hazırlık için interaktif soru çalışma uygulaması",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#1a1a2e",
+  "theme_color": "#e94560",
+  "orientation": "portrait-primary",
+  "icons": [],
+  "categories": ["education", "productivity"],
+  "lang": "tr"
+}

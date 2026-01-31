@@ -2115,72 +2115,26 @@ async function askGPTExplanation(wrongAnswerIndex) {
 }
 
 async function fetchGPTExplanation(question, userAnswer) {
-    const optionsText = question.options.map(o => `${o.letter}) ${o.text}`).join('\n');
-    const correctOption = question.options.find(o => o.letter === question.correct_answer);
-    const userOption = question.options.find(o => o.letter === userAnswer);
-    
-    const prompt = `Aşağıdaki YDS İngilizce gramer sorusunu analiz et ve Türkçe açıkla.
-
-📝 SORU:
-"${question.question_text}"
-
-📋 ŞIKLAR:
-${optionsText}
-
-❌ Öğrencinin Cevabı: ${userAnswer}) ${userOption ? userOption.text : userAnswer}
-✅ Doğru Cevap: ${question.correct_answer}) ${correctOption ? correctOption.text : question.correct_answer}
-
-Aşağıdaki formatta yanıt ver:
-
-**🎯 DOĞRU CEVAP NEDENİ:**
-[Neden ${question.correct_answer} şıkkı doğru? Cümledeki hangi ipuçları bu cevabı işaret ediyor?]
-
-**❌ YANLIŞ CEVAP ANALİZİ:**
-[${userAnswer} şıkkı neden yanlış? Bu şık hangi durumda kullanılır?]
-
-**📚 GRAMER KURALI:**
-[Bu soruyla ilgili temel gramer kuralını kısaca açıkla]
-
-**💡 İPUCU:**
-[Benzer sorularda dikkat edilmesi gereken 1-2 pratik ipucu]`;
-
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetch(`${API_URL}/gpt-explain`, {
         method: 'POST',
         headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${OPENAI_CONFIG.apiKey}`
+            'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-            model: OPENAI_CONFIG.model,
-            messages: [
-                {
-                    role: 'system',
-                    content: `Sen deneyimli bir YDS/YÖKDİL İngilizce öğretmenisin. Öğrencilere gramer konularını açık, anlaşılır ve motive edici şekilde açıklıyorsun. 
-                    
-Kurallar:
-- Türkçe açıkla
-- Kısa ve öz ol (maksimum 250 kelime)
-- Emoji kullan ama abartma
-- Teknik terimleri basit örneklerle açıkla
-- Öğrenciyi motive et, yanlış cevap için olumsuz konuşma`
-                },
-                {
-                    role: 'user',
-                    content: prompt
-                }
-            ],
-            max_tokens: 600,
-            temperature: 0.7
+            question: question.question_text,
+            userAnswer: userAnswer,
+            options: question.options,
+            correctAnswer: question.correct_answer
         })
     });
 
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error?.message || 'API request failed');
+        throw new Error(errorData.error || 'API request failed');
     }
 
     const data = await response.json();
-    return data.choices[0]?.message?.content || 'Açıklama alınamadı.';
+    return data.explanation || 'Açıklama alınamadı.';
 }
 
 function showGPTExplanationModal(question, userAnswer, explanation, fromCache) {

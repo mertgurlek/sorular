@@ -21,7 +21,7 @@ if not DATABASE_URL:
     print("Set it like: set DATABASE_URL=postgres://user:pass@host:port/db")
     exit(1)
 
-# Category file mapping
+# Category file mapping - Gramer kategorileri
 CATEGORY_FILES = {
     'Adjectives & Adverbs': 'adjectives_adverbs.json',
     'Conjunctions': 'conjunctions.json',
@@ -34,7 +34,18 @@ CATEGORY_FILES = {
     'Passive': 'passive.json',
     'Reductions': 'reductions.json',
     'Relative Clauses': 'relative_clauses.json',
-    'Tenses': 'tenses.json'
+    'Tenses': 'tenses.json',
+    # YDS soru tipleri
+    'YDS Cümle Tamamlama': 'yds_cümle_tamamlama.json',
+    'YDS Diyalog': 'yds_diyalog.json',
+    'YDS Durum': 'yds_durum.json',
+    'YDS Eş Anlam': 'yds_eş_anlam.json',
+    'YDS İlgisiz Cümleyi Bulma': 'yds_ilgisiz_cümleyi_bulma.json',
+    'YDS Kelime Soruları': 'yds_kelime_soruları.json',
+    'YDS Okuma Soruları': 'yds_okuma_soruları.json',
+    'YDS Paragraf Doldurma': 'yds_paragraf_doldurma.json',
+    'YDS Phrasal Verbs & Prepositions': 'yds_phrasal_verbs_prepositions.json',
+    'YDS Çeviri Soruları': 'yds_çeviri_soruları.json'
 }
 
 def create_tables(conn):
@@ -116,9 +127,10 @@ def migrate_questions(conn):
     conn.commit()
     print("🗑️ Cleared existing questions")
     
-    base_path = Path(__file__).parent / 'quiz-app' / 'yds_questions'
+    base_path = Path(__file__).parent / 'yds_questions'
     total_inserted = 0
     
+    # 1. Migrate grammar category files
     for category_name, filename in CATEGORY_FILES.items():
         filepath = base_path / filename
         
@@ -154,6 +166,41 @@ def migrate_questions(conn):
         conn.commit()
         total_inserted += inserted
         print(f"✅ {category_name}: {inserted} questions inserted")
+    
+    # 2. Migrate YDS all categories file
+    yds_all_path = base_path / 'yds_all_categories.json'
+    if yds_all_path.exists():
+        with open(yds_all_path, 'r', encoding='utf-8') as f:
+            yds_data = json.load(f)
+        
+        yds_questions = yds_data.get('questions', [])
+        yds_inserted = 0
+        
+        for q in yds_questions:
+            if not q.get('question_text') or not q.get('correct_answer'):
+                continue
+            
+            # Use category from question or default
+            category = q.get('category', 'YDS Genel')
+            
+            cursor.execute("""
+                INSERT INTO questions 
+                (question_number, question_text, options, correct_answer, category, url, test_url)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, (
+                q.get('question_number', ''),
+                q['question_text'],
+                Json(q.get('options', [])),
+                q['correct_answer'],
+                category,
+                q.get('url', ''),
+                q.get('test_url', '')
+            ))
+            yds_inserted += 1
+        
+        conn.commit()
+        total_inserted += yds_inserted
+        print(f"✅ YDS All Categories: {yds_inserted} questions inserted")
     
     print(f"\n🎉 Total: {total_inserted} questions migrated to PostgreSQL")
 
