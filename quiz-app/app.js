@@ -208,21 +208,21 @@ const OPENAI_CONFIG = {
     model: 'gpt-4o-mini'
 };
 
-// Category file mapping
-const CATEGORY_FILES = {
-    'Adjectives & Adverbs': 'adjectives_adverbs.json',
-    'Conjunctions': 'conjunctions.json',
-    'Gerunds & Infinitives': 'gerunds_infinitives.json',
-    'Grammar Revision': 'grammar_revision.json',
-    'If Clauses': 'if_clauses.json',
-    'Modals': 'modals.json',
-    'Noun Clauses': 'noun_clauses.json',
-    'Nouns': 'nouns.json',
-    'Passive': 'passive.json',
-    'Reductions': 'reductions.json',
-    'Relative Clauses': 'relative_clauses.json',
-    'Tenses': 'tenses.json'
-};
+// Category names for display
+const CATEGORY_NAMES = [
+    'Adjectives & Adverbs',
+    'Conjunctions',
+    'Gerunds & Infinitives',
+    'Grammar Revision',
+    'If Clauses',
+    'Modals',
+    'Noun Clauses',
+    'Nouns',
+    'Passive',
+    'Reductions',
+    'Relative Clauses',
+    'Tenses'
+];
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
@@ -255,51 +255,79 @@ function toggleTheme() {
     localStorage.setItem(STORAGE_KEYS.THEME, isDark ? 'dark' : 'light');
 }
 
-// Load Categories
+// Load Categories from PostgreSQL API
 async function loadCategories() {
     const grid = document.getElementById('category-grid');
-    grid.innerHTML = '';
+    grid.innerHTML = '<p class="loading">Sorular yükleniyor...</p>';
 
-    for (const [name, file] of Object.entries(CATEGORY_FILES)) {
-        try {
-            const response = await fetch(`./yds_questions/${file}`);
-            const data = await response.json();
-            const validQuestions = data.questions.filter(q => q.question_text && q.correct_answer);
-            
-            allQuestions.push(...validQuestions.map(q => ({ ...q, category: name })));
-
+    try {
+        // Fetch categories summary
+        const categoriesResponse = await fetch(`${API_URL}/categories`);
+        const categoriesData = await categoriesResponse.json();
+        
+        if (!categoriesData.success) {
+            throw new Error('Failed to load categories');
+        }
+        
+        // Fetch all questions
+        const questionsResponse = await fetch(`${API_URL}/questions`);
+        const questionsData = await questionsResponse.json();
+        
+        if (!questionsData.success) {
+            throw new Error('Failed to load questions');
+        }
+        
+        // Store all questions
+        allQuestions = questionsData.questions.map(q => ({
+            ...q,
+            options: typeof q.options === 'string' ? JSON.parse(q.options) : q.options
+        }));
+        
+        grid.innerHTML = '';
+        
+        // Create category buttons
+        for (const cat of categoriesData.categories) {
             const btn = document.createElement('button');
             btn.className = 'category-btn';
-            btn.dataset.category = name;
+            btn.dataset.category = cat.category;
             btn.innerHTML = `
-                ${name}
-                <span class="count">${validQuestions.length} soru</span>
+                ${cat.category}
+                <span class="count">${cat.count} soru</span>
             `;
-            btn.addEventListener('click', () => selectCategory(btn, name));
+            btn.addEventListener('click', () => selectCategory(btn, cat.category));
             grid.appendChild(btn);
-        } catch (e) {
-            console.error(`Failed to load ${file}:`, e);
         }
-    }
 
-    // Add "All Questions" option
-    const allBtn = document.createElement('button');
-    allBtn.className = 'category-btn';
-    allBtn.dataset.category = 'all';
-    allBtn.innerHTML = `
-        Tüm Sorular
-        <span class="count">${allQuestions.length} soru</span>
-    `;
-    allBtn.addEventListener('click', () => selectCategory(allBtn, 'all'));
-    grid.insertBefore(allBtn, grid.firstChild);
+        // Add "All Questions" option at the beginning
+        const allBtn = document.createElement('button');
+        allBtn.className = 'category-btn';
+        allBtn.dataset.category = 'all';
+        allBtn.innerHTML = `
+            Tüm Sorular
+            <span class="count">${categoriesData.total} soru</span>
+        `;
+        allBtn.addEventListener('click', () => selectCategory(allBtn, 'all'));
+        grid.insertBefore(allBtn, grid.firstChild);
 
-    // Populate filter dropdown
-    const filterSelect = document.getElementById('wrongFilterCategory');
-    for (const name of Object.keys(CATEGORY_FILES)) {
-        const option = document.createElement('option');
-        option.value = name;
-        option.textContent = name;
-        filterSelect.appendChild(option);
+        // Populate filter dropdown
+        const filterSelect = document.getElementById('wrongFilterCategory');
+        for (const cat of categoriesData.categories) {
+            const option = document.createElement('option');
+            option.value = cat.category;
+            option.textContent = cat.category;
+            filterSelect.appendChild(option);
+        }
+        
+        console.log(`✅ Loaded ${allQuestions.length} questions from database`);
+        
+    } catch (error) {
+        console.error('Failed to load categories:', error);
+        grid.innerHTML = `
+            <p class="error-state">
+                Sorular yüklenemedi. 
+                <button onclick="loadCategories()" class="btn btn-small">Tekrar Dene</button>
+            </p>
+        `;
     }
 }
 
@@ -845,7 +873,7 @@ function updateStats() {
 
     // Category stats
     const categoryStatsContainer = document.getElementById('categoryStats');
-    const categories = Object.keys(CATEGORY_FILES);
+    const categories = CATEGORY_NAMES;
     
     categoryStatsContainer.innerHTML = categories.map(cat => {
         const catStats = stats[cat] || { correct: 0, wrong: 0 };

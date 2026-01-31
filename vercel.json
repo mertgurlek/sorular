@@ -1,7 +1,10 @@
 {
   "version": 2,
-  "outputDirectory": "quiz-app",
   "builds": [
+    {
+      "src": "api/**/*.js",
+      "use": "@vercel/node"
+    },
     {
       "src": "quiz-app/**/*",
       "use": "@vercel/static"
@@ -9,11 +12,48 @@
   ],
   "routes": [
     {
+      "src": "/api/auth/login",
+      "dest": "/api/auth/login.js"
+    },
+    {
+      "src": "/api/auth/register",
+      "dest": "/api/auth/register.js"
+    },
+    {
+      "src": "/api/questions",
+      "dest": "/api/questions.js"
+    },
+    {
+      "src": "/api/categories",
+      "dest": "/api/categories.js"
+    },
+    {
+      "src": "/api/init-db",
+      "dest": "/api/init-db.js"
+    },
+    {
+      "src": "/api/health",
+      "dest": "/api/health.js"
+    },
+    {
       "src": "/(.*)",
       "dest": "/quiz-app/$1"
     }
   ],
   "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Access-Control-Allow-Methods",
+          "value": "GET, POST, OPTIONS"
+        }
+      ]
+    },
     {
       "source": "/(.*)",
       "headers": [
