@@ -967,15 +967,9 @@ function selectAnswer(letter) {
     } else {
         currentQuiz.wrong++;
         feedback.classList.add('wrong');
-        const gptButton = !hasDbExplanation ? `
-            <button class="btn btn-small gpt-ask-btn" onclick="openGPTPanel()">
-                🤖 GPT'den Açıklama İste
-            </button>
-        ` : '';
         feedback.innerHTML = `
             <p id="feedbackText">✗ Yanlış! Doğru cevap: ${q.correct_answer}</p>
             ${explanationHtml}
-            ${gptButton}
         `;
         playSound('wrong');
         

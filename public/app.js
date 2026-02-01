@@ -2145,43 +2145,24 @@ Aşağıdaki formatta yanıt ver:
 **💡 İPUCU:**
 [Benzer sorularda dikkat edilmesi gereken 1-2 pratik ipucu]`;
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetch(`${API_URL}/openai-explain`, {
         method: 'POST',
         headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${OPENAI_CONFIG.apiKey}`
+            'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-            model: OPENAI_CONFIG.model,
-            messages: [
-                {
-                    role: 'system',
-                    content: `Sen deneyimli bir YDS/YÖKDİL İngilizce öğretmenisin. Öğrencilere gramer konularını açık, anlaşılır ve motive edici şekilde açıklıyorsun. 
-                    
-Kurallar:
-- Türkçe açıkla
-- Kısa ve öz ol (maksimum 250 kelime)
-- Emoji kullan ama abartma
-- Teknik terimleri basit örneklerle açıkla
-- Öğrenciyi motive et, yanlış cevap için olumsuz konuşma`
-                },
-                {
-                    role: 'user',
-                    content: prompt
-                }
-            ],
-            max_tokens: 600,
-            temperature: 0.7
+            prompt,
+            model: OPENAI_CONFIG.model
         })
     });
 
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error?.message || 'API request failed');
+        throw new Error(errorData.error || 'API request failed');
     }
 
     const data = await response.json();
-    return data.choices[0]?.message?.content || 'Açıklama alınamadı.';
+    return data.explanation || 'Açıklama alınamadı.';
 }
 
 function showGPTExplanationModal(question, userAnswer, explanation, fromCache) {

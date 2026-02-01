@@ -332,6 +332,63 @@ app.get('/api/health', (req, res) => {
     res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
+app.post('/api/openai-explain', async (req, res) => {
+    try {
+        const apiKey = process.env.OPENAI_API_KEY;
+        const { prompt, model } = req.body || {};
+
+        if (!apiKey) {
+            return res.status(500).json({ error: 'OPENAI_API_KEY is not configured' });
+        }
+
+        if (!prompt || typeof prompt !== 'string') {
+            return res.status(400).json({ error: 'prompt is required' });
+        }
+
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
+            },
+            body: JSON.stringify({
+                model: model || 'gpt-4o-mini',
+                messages: [
+                    {
+                        role: 'system',
+                        content: `Sen deneyimli bir YDS/YÖKDİL İngilizce öğretmenisin. Öğrencilere gramer konularını açık, anlaşılır ve motive edici şekilde açıklıyorsun. 
+                    
+Kurallar:
+- Türkçe açıkla
+- Kısa ve öz ol (maksimum 250 kelime)
+- Emoji kullan ama abartma
+- Teknik terimleri basit örneklerle açıkla
+- Öğrenciyi motive et, yanlış cevap için olumsuz konuşma`
+                    },
+                    {
+                        role: 'user',
+                        content: prompt
+                    }
+                ],
+                max_tokens: 600,
+                temperature: 0.7
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            return res.status(response.status).json({ error: errorData.error?.message || 'OpenAI request failed' });
+        }
+
+        const data = await response.json();
+        const explanation = data.choices?.[0]?.message?.content || 'Açıklama alınamadı.';
+        res.json({ explanation });
+    } catch (error) {
+        console.error('OpenAI explain error:', error);
+        res.status(500).json({ error: 'Sunucu hatası' });
+    }
+});
+
 // ==================== CATEGORIES & QUESTIONS ROUTES ====================
 
 // Get categories
