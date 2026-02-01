@@ -2521,6 +2521,133 @@ body:not(.dark-mode) .icon-moon { display: none; }
     }
 }
 
+/* Exam Size Selector */
+.exam-size-selector {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin: 24px 0;
+}
+
+.exam-size-option input[type="radio"] {
+    display: none;
+}
+
+.exam-size-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px 16px;
+    background: var(--option-bg);
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: center;
+}
+
+.exam-size-card:hover {
+    background: var(--option-hover);
+    border-color: var(--accent);
+    transform: translateY(-2px);
+}
+
+.exam-size-option input[type="radio"]:checked + .exam-size-card {
+    background: var(--accent-glow);
+    border-color: var(--accent);
+    box-shadow: 0 0 20px var(--accent-glow);
+}
+
+.exam-size-icon {
+    font-size: 2rem;
+    margin-bottom: 8px;
+}
+
+.exam-size-title {
+    font-weight: 600;
+    font-size: 1rem;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.exam-size-count {
+    font-size: 0.9rem;
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.exam-size-time {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+
+/* Distribution Info */
+.exam-distribution-info {
+    background: var(--option-bg);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    margin-bottom: 24px;
+}
+
+.exam-distribution-info h4 {
+    margin-bottom: 12px;
+    color: var(--text-primary);
+    font-size: 0.95rem;
+}
+
+.distribution-preview {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 8px;
+}
+
+.distribution-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: var(--bg-card);
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+}
+
+.distribution-item .cat-name {
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100px;
+}
+
+.distribution-item .cat-count {
+    color: var(--accent);
+    font-weight: 600;
+    margin-left: 8px;
+}
+
+@media (max-width: 768px) {
+    .exam-size-selector {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+    
+    .exam-size-card {
+        flex-direction: row;
+        justify-content: flex-start;
+        gap: 16px;
+        padding: 16px;
+    }
+    
+    .exam-size-icon {
+        margin-bottom: 0;
+    }
+    
+    .distribution-preview {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
 /* Responsive */
 @media (max-width: 600px) {
     .container {
@@ -2567,4 +2694,169 @@ body:not(.dark-mode) .icon-moon { display: none; }
         flex-direction: column;
         gap: 8px;
     }
+}
+
+/* ==================== ANSWER HISTORY INDICATOR ==================== */
+.history-indicator {
+    margin-bottom: 12px;
+    text-align: center;
+}
+
+.history-indicator.hidden {
+    display: none;
+}
+
+.history-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    animation: fadeIn 0.3s ease-out;
+}
+
+.history-badge.history-correct {
+    background: var(--success-bg);
+    color: var(--success);
+    border: 1px solid rgba(0, 206, 201, 0.3);
+}
+
+.history-badge.history-wrong {
+    background: var(--error-bg);
+    color: var(--error);
+    border: 1px solid rgba(255, 118, 117, 0.3);
+}
+
+.history-badge.history-new {
+    background: rgba(108, 92, 231, 0.15);
+    color: var(--accent);
+    border: 1px solid rgba(108, 92, 231, 0.3);
+}
+
+/* History Filter Dropdown Styling */
+#historyFilter {
+    min-width: 180px;
+}
+
+/* Stats Actions Container */
+.stats-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 24px;
+    flex-wrap: wrap;
+}
+
+.stats-actions .btn {
+    flex: 1;
+    min-width: 200px;
+}
+
+/* ==================== STRIKETHROUGH OPTION ==================== */
+.option-strikethrough-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 118, 117, 0.3);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-left: auto;
+    opacity: 0.6;
+}
+
+.option-strikethrough-btn:hover {
+    background: rgba(255, 118, 117, 0.15);
+    color: var(--error);
+    border-color: var(--error);
+    opacity: 1;
+}
+
+.option.struck-out {
+    background: rgba(255, 118, 117, 0.08) !important;
+    border-color: rgba(255, 118, 117, 0.2) !important;
+    position: relative;
+}
+
+.option.struck-out .text {
+    text-decoration: line-through;
+    text-decoration-color: var(--error);
+    text-decoration-thickness: 2px;
+    color: var(--text-secondary);
+    opacity: 0.6;
+}
+
+.option.struck-out .option-select-btn {
+    opacity: 0.5;
+    background: rgba(255, 118, 117, 0.2) !important;
+}
+
+.option.struck-out .option-strikethrough-btn {
+    background: rgba(255, 118, 117, 0.2);
+    color: var(--error);
+    border-color: var(--error);
+    opacity: 1;
+}
+
+.option.struck-out::after {
+    content: '';
+    position: absolute;
+    left: 60px;
+    right: 50px;
+    top: 50%;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--error), transparent);
+    opacity: 0.4;
+}
+
+/* Hide strikethrough button when option is disabled (answered) */
+.option.disabled .option-strikethrough-btn {
+    display: none;
+}
+
+/* Database Explanation Styles */
+.db-explanation {
+    margin-top: 15px;
+    padding: 15px;
+    background: var(--bg-card);
+    border-radius: var(--radius-sm);
+    border-left: 4px solid var(--accent);
+    text-align: left;
+}
+
+.db-explanation p {
+    margin: 8px 0;
+    line-height: 1.6;
+    font-size: 0.95rem;
+}
+
+.db-explanation .explanation-tip {
+    color: var(--warning);
+    background: rgba(253, 203, 110, 0.1);
+    padding: 10px;
+    border-radius: var(--radius-sm);
+}
+
+.db-explanation .explanation-text {
+    color: var(--text-primary);
+}
+
+.db-explanation .explanation-translation {
+    color: var(--text-secondary);
+    font-style: italic;
+    background: rgba(108, 92, 231, 0.1);
+    padding: 10px;
+    border-radius: var(--radius-sm);
+}
+
+.db-explanation .explanation-difficulty {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
 }

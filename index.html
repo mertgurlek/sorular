@@ -171,8 +171,13 @@
                         <span>Soruları Karıştır</span>
                     </label>
                     <label>
-                        <input type="checkbox" id="onlyWrong">
-                        <span>Sadece Yanlışlardan</span>
+                        <span>Soru Filtresi:</span>
+                        <select id="historyFilter">
+                            <option value="all">Tüm Sorular</option>
+                            <option value="unsolved">Sadece Çözülmemişler</option>
+                            <option value="wrong">Sadece Yanlışlarım</option>
+                            <option value="exclude_correct">Doğrular Hariç</option>
+                        </select>
                     </label>
                 </div>
                 <button id="startQuiz" class="btn btn-primary btn-large" disabled>Başla</button>
@@ -200,6 +205,7 @@
                 </div>
 
                 <div id="questionContainer" class="question-container">
+                    <div id="historyIndicator" class="history-indicator hidden"></div>
                     <div class="question-header">
                         <p id="questionText" class="question-text"></p>
                         <button id="favoriteBtn" class="btn btn-icon favorite-btn" title="Favorilere Ekle">
@@ -244,23 +250,42 @@
             <!-- Exam Setup -->
             <div id="exam-setup" class="card">
                 <h2>📋 YDS Sınav Simülasyonu</h2>
-                <p class="exam-description">Gerçek YDS sınavı formatında 80 soruluk deneme sınavı. Toplam süre: 150 dakika.</p>
+                <p class="exam-description">Gerçek YDS sınavı formatında deneme sınavı. Sınav boyutunu seçin:</p>
                 
-                <div class="exam-options">
-                    <div class="exam-option-card">
-                        <span class="exam-option-icon">📝</span>
-                        <span class="exam-option-title">80 Soru</span>
-                        <span class="exam-option-desc">Tüm kategorilerden karışık</span>
-                    </div>
-                    <div class="exam-option-card">
-                        <span class="exam-option-icon">⏱️</span>
-                        <span class="exam-option-title">150 Dakika</span>
-                        <span class="exam-option-desc">Toplam süre limiti</span>
-                    </div>
-                    <div class="exam-option-card">
-                        <span class="exam-option-icon">🎯</span>
-                        <span class="exam-option-title">Gerçek Format</span>
-                        <span class="exam-option-desc">Sonuç analizi dahil</span>
+                <div class="exam-size-selector">
+                    <label class="exam-size-option">
+                        <input type="radio" name="examSize" value="mini" id="examSizeMini">
+                        <div class="exam-size-card">
+                            <span class="exam-size-icon">⚡</span>
+                            <span class="exam-size-title">Mini Quiz</span>
+                            <span class="exam-size-count">20 Soru</span>
+                            <span class="exam-size-time">35 dakika</span>
+                        </div>
+                    </label>
+                    <label class="exam-size-option">
+                        <input type="radio" name="examSize" value="medium" id="examSizeMedium">
+                        <div class="exam-size-card">
+                            <span class="exam-size-icon">📝</span>
+                            <span class="exam-size-title">Orta Quiz</span>
+                            <span class="exam-size-count">40 Soru</span>
+                            <span class="exam-size-time">75 dakika</span>
+                        </div>
+                    </label>
+                    <label class="exam-size-option">
+                        <input type="radio" name="examSize" value="full" id="examSizeFull" checked>
+                        <div class="exam-size-card">
+                            <span class="exam-size-icon">🎯</span>
+                            <span class="exam-size-title">Tam YDS</span>
+                            <span class="exam-size-count">80 Soru</span>
+                            <span class="exam-size-time">150 dakika</span>
+                        </div>
+                    </label>
+                </div>
+
+                <div class="exam-distribution-info">
+                    <h4>📊 YDS Soru Dağılımı</h4>
+                    <div id="examDistributionPreview" class="distribution-preview">
+                        <!-- Will be populated by JS -->
                     </div>
                 </div>
                 
@@ -522,7 +547,10 @@
                     <!-- Category stats will be loaded here -->
                 </div>
 
-                <button id="resetStats" class="btn btn-danger">İstatistikleri Sıfırla</button>
+                <div class="stats-actions">
+                    <button id="resetStats" class="btn btn-danger">İstatistikleri Sıfırla</button>
+                    <button id="clearAnswerHistory" class="btn btn-secondary">Cevap Geçmişini Temizle</button>
+                </div>
             </div>
         </section>
         </div><!-- container kapanışı -->

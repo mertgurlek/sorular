@@ -158,7 +158,7 @@ function handleLogout() {
     document.getElementById('registerError').textContent = '';
 }
 
-function showMainApp() {
+async function showMainApp() {
     document.getElementById('authScreen').classList.add('hidden');
     document.getElementById('mainApp').classList.remove('hidden');
     
@@ -172,6 +172,8 @@ function showMainApp() {
             userInfo.classList.add('guest');
         } else {
             userInfo.classList.remove('guest');
+            // Load user data from API for logged-in users
+            await loadUserDataFromAPI();
         }
     }
 }
@@ -199,7 +201,8 @@ const STORAGE_KEYS = {
     DAILY_GOAL: 'yds_daily_goal',
     STREAK: 'yds_streak',
     FAVORITES: 'yds_favorites',
-    GPT_EXPLANATIONS: 'yds_gpt_explanations'
+    GPT_EXPLANATIONS: 'yds_gpt_explanations',
+    ANSWER_HISTORY: 'yds_answer_history'
 };
 
 // OpenAI API Configuration
@@ -207,6 +210,165 @@ const OPENAI_CONFIG = {
     apiKey: '', // API key should be set via environment variable or server-side
     model: 'gpt-4o-mini'
 };
+
+// ==================== USER DATA SYNC ====================
+// Cache for user data (loaded from API for logged-in users)
+let userDataCache = {
+    unknownWords: null,
+    answerHistory: null,
+    favorites: null,
+    wrongAnswers: null,
+    dailyStats: null,
+    loaded: false
+};
+
+// Check if user is logged in (not guest)
+function isLoggedIn() {
+    return currentUser && currentUser.id && !currentUser.isGuest;
+}
+
+// Load all user data from API
+async function loadUserDataFromAPI() {
+    if (!isLoggedIn()) {
+        userDataCache.loaded = true;
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_URL}/user/${currentUser.id}/all-data`);
+        const data = await response.json();
+        
+        if (data.success) {
+            userDataCache.unknownWords = data.data.unknownWords || [];
+            userDataCache.answerHistory = data.data.answerHistory || {};
+            userDataCache.favorites = data.data.favorites || [];
+            userDataCache.wrongAnswers = data.data.wrongAnswers || [];
+            userDataCache.dailyStats = data.data.dailyStats || {};
+            userDataCache.loaded = true;
+            
+            // Also update localStorage as backup
+            localStorage.setItem(STORAGE_KEYS.UNKNOWN_WORDS, JSON.stringify(userDataCache.unknownWords));
+            localStorage.setItem(STORAGE_KEYS.ANSWER_HISTORY, JSON.stringify(userDataCache.answerHistory));
+            localStorage.setItem(STORAGE_KEYS.FAVORITES, JSON.stringify(userDataCache.favorites));
+            localStorage.setItem(STORAGE_KEYS.DAILY_STATS, JSON.stringify(userDataCache.dailyStats));
+            
+            console.log('✅ User data loaded from server');
+        }
+    } catch (error) {
+        console.error('Failed to load user data from API:', error);
+        // Fall back to localStorage
+        userDataCache.loaded = true;
+    }
+}
+
+// Sync unknown word to API
+async function syncUnknownWord(word, isAdding) {
+    if (!isLoggedIn()) return;
+    
+    try {
+        if (isAdding) {
+            await fetch(`${API_URL}/user/${currentUser.id}/unknown-words`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ word })
+            });
+        } else {
+            await fetch(`${API_URL}/user/${currentUser.id}/unknown-words/${encodeURIComponent(word)}`, {
+                method: 'DELETE'
+            });
+        }
+    } catch (error) {
+        console.error('Sync unknown word error:', error);
+    }
+}
+
+// Sync answer history to API
+async function syncAnswerHistory(question, userAnswer, isCorrect) {
+    if (!isLoggedIn()) return;
+    
+    try {
+        const questionHash = getQuestionKey(question);
+        await fetch(`${API_URL}/user/${currentUser.id}/answer-history`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                questionHash,
+                questionText: question.question_text.substring(0, 100),
+                category: question.category,
+                userAnswer,
+                isCorrect
+            })
+        });
+    } catch (error) {
+        console.error('Sync answer history error:', error);
+    }
+}
+
+// Sync favorite to API
+async function syncFavorite(question, isAdding) {
+    if (!isLoggedIn()) return;
+    
+    try {
+        if (isAdding) {
+            await fetch(`${API_URL}/user/${currentUser.id}/favorites`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question })
+            });
+        } else {
+            await fetch(`${API_URL}/user/${currentUser.id}/favorites`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ questionText: question.question_text })
+            });
+        }
+    } catch (error) {
+        console.error('Sync favorite error:', error);
+    }
+}
+
+// Sync wrong answer to API
+async function syncWrongAnswer(question, userAnswer) {
+    if (!isLoggedIn()) return;
+    
+    try {
+        await fetch(`${API_URL}/user/${currentUser.id}/wrong-answers`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                questionText: question.question_text,
+                category: question.category,
+                userAnswer,
+                correctAnswer: question.correct_answer
+            })
+        });
+    } catch (error) {
+        console.error('Sync wrong answer error:', error);
+    }
+}
+
+// Sync daily stats to API
+async function syncDailyStats() {
+    if (!isLoggedIn()) return;
+    
+    try {
+        const today = getTodayKey();
+        const dailyStats = getDailyStats();
+        const todayStats = dailyStats[today] || { answered: 0, correct: 0 };
+        
+        await fetch(`${API_URL}/user/${currentUser.id}/daily-stats`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                date: today,
+                answered: todayStats.answered,
+                correct: todayStats.correct
+            })
+        });
+    } catch (error) {
+        console.error('Sync daily stats error:', error);
+    }
+}
 
 // Category names for display
 const CATEGORY_NAMES = [
@@ -223,6 +385,63 @@ const CATEGORY_NAMES = [
     'Relative Clauses',
     'Tenses'
 ];
+
+// YDS Sınav Dağılımı - Gerçek YDS formatına göre
+const YDS_DISTRIBUTION = {
+    'mini': {  // 20 soru
+        'YDS Kelime Soruları': 3,
+        'YDS Gramer': 3,
+        'YDS Cümle Tamamlama': 2,
+        'YDS Çeviri Soruları': 3,
+        'YDS Diyalog': 1,
+        'YDS Paragraf Doldurma': 1,
+        'YDS İlgisiz Cümleyi Bulma': 1,
+        'YDS Reading Passages': 4,
+        'YDS Eş Anlam': 2
+    },
+    'medium': {  // 40 soru
+        'YDS Kelime Soruları': 5,
+        'YDS Gramer': 5,
+        'YDS Cümle Tamamlama': 5,
+        'YDS Çeviri Soruları': 6,
+        'YDS Diyalog': 3,
+        'YDS Paragraf Doldurma': 3,
+        'YDS İlgisiz Cümleyi Bulma': 3,
+        'YDS Reading Passages': 8,
+        'YDS Eş Anlam': 2
+    },
+    'full': {  // 80 soru - Gerçek YDS
+        'YDS Kelime Soruları': 10,
+        'YDS Gramer': 10,
+        'YDS Cümle Tamamlama': 10,
+        'YDS Çeviri Soruları': 12,
+        'YDS Diyalog': 5,
+        'YDS Paragraf Doldurma': 5,
+        'YDS İlgisiz Cümleyi Bulma': 5,
+        'YDS Reading Passages': 18,
+        'YDS Eş Anlam': 5
+    }
+};
+
+// Kategori eşleştirmeleri (DB kategorileri -> YDS kategorileri)
+const CATEGORY_MAPPING = {
+    'YDS Kelime Soruları': ['YDS Kelime Soruları'],
+    'YDS Gramer': ['YDS Gramer', 'Grammar Revision'],
+    'YDS Cümle Tamamlama': ['YDS Cümle Tamamlama'],
+    'YDS Çeviri Soruları': ['YDS Çeviri Soruları'],
+    'YDS Diyalog': ['YDS Diyalog'],
+    'YDS Paragraf Doldurma': ['YDS Paragraf Doldurma'],
+    'YDS İlgisiz Cümleyi Bulma': ['YDS İlgisiz Cümleyi Bulma'],
+    'YDS Reading Passages': ['YDS Reading Passages', 'YDS Okuma Soruları'],
+    'YDS Eş Anlam': ['YDS Eş Anlam', 'YDS Durum']
+};
+
+// Exam time limits (in seconds)
+const EXAM_TIME_LIMITS = {
+    'mini': 35 * 60,    // 35 minutes
+    'medium': 75 * 60,  // 75 minutes
+    'full': 150 * 60    // 150 minutes
+};
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
@@ -277,11 +496,39 @@ async function loadCategories() {
             throw new Error('Failed to load questions');
         }
         
-        // Store all questions
-        allQuestions = questionsData.questions.map(q => ({
-            ...q,
-            options: typeof q.options === 'string' ? JSON.parse(q.options) : q.options
-        }));
+        // Store all questions - handle nested options structure and extract extra fields
+        allQuestions = questionsData.questions.map(q => {
+            let optionsData = q.options;
+            if (typeof optionsData === 'string') {
+                try { optionsData = JSON.parse(optionsData); } catch (e) { optionsData = {}; }
+            }
+            
+            // Extract extra fields from nested structure
+            let options = [];
+            let explanation_tr = null;
+            let question_tr = null;
+            let tip = null;
+            let difficulty = null;
+            
+            if (optionsData && typeof optionsData === 'object' && !Array.isArray(optionsData)) {
+                options = Array.isArray(optionsData.options) ? optionsData.options : [];
+                explanation_tr = optionsData.explanation_tr || null;
+                question_tr = optionsData.question_tr || null;
+                tip = optionsData.tip || null;
+                difficulty = optionsData.difficulty || null;
+            } else if (Array.isArray(optionsData)) {
+                options = optionsData;
+            }
+            
+            return {
+                ...q,
+                options: options,
+                explanation_tr: explanation_tr,
+                question_tr: question_tr,
+                tip: tip,
+                difficulty: difficulty
+            };
+        });
         
         grid.innerHTML = '';
         
@@ -364,6 +611,7 @@ function initEventListeners() {
 
     // Stats
     document.getElementById('resetStats').addEventListener('click', resetStats);
+    document.getElementById('clearAnswerHistory').addEventListener('click', clearAnswerHistory);
 }
 
 function switchTab(tabName) {
@@ -385,22 +633,18 @@ function startQuiz() {
     const category = currentQuiz.selectedCategory;
     const countSelect = document.getElementById('questionCount').value;
     const shuffle = document.getElementById('shuffleQuestions').checked;
-    const onlyWrong = document.getElementById('onlyWrong').checked;
     const timerLimit = parseInt(document.getElementById('timerMode').value);
+    const historyFilter = document.getElementById('historyFilter')?.value || 'all';
 
     let questions;
     
-    if (onlyWrong) {
-        const wrongAnswers = getWrongAnswers();
-        questions = wrongAnswers.map(w => w.question);
-        if (category !== 'all') {
-            questions = questions.filter(q => q.category === category);
-        }
-    } else {
-        questions = category === 'all' 
-            ? [...allQuestions]
-            : allQuestions.filter(q => q.category === category);
-    }
+    // First filter by category
+    questions = category === 'all' 
+        ? [...allQuestions]
+        : allQuestions.filter(q => q.category === category);
+    
+    // Then apply history filter
+    questions = filterQuestionsByHistory(questions, historyFilter);
 
     if (questions.length === 0) {
         alert('Bu kategoride soru bulunamadı!');
@@ -445,6 +689,27 @@ function showQuestion() {
     const progress = ((currentQuiz.currentIndex) / currentQuiz.questions.length) * 100;
     document.getElementById('progressFill').style.width = `${progress}%`;
 
+    // Show previous answer history if exists
+    const questionHistory = getQuestionHistory(q);
+    const historyIndicator = document.getElementById('historyIndicator');
+    if (historyIndicator) {
+        if (questionHistory) {
+            const lastAttempt = questionHistory.attempts[questionHistory.attempts.length - 1];
+            const statusClass = questionHistory.lastCorrect ? 'history-correct' : 'history-wrong';
+            const statusIcon = questionHistory.lastCorrect ? '✓' : '✗';
+            const statusText = questionHistory.lastCorrect ? 'Daha önce doğru yaptınız' : 'Daha önce yanlış yaptınız';
+            historyIndicator.innerHTML = `
+                <span class="history-badge ${statusClass}">
+                    ${statusIcon} ${statusText} (${questionHistory.correctCount}/${questionHistory.totalAttempts})
+                </span>
+            `;
+            historyIndicator.classList.remove('hidden');
+        } else {
+            historyIndicator.innerHTML = `<span class="history-badge history-new">🆕 İlk kez çözüyorsunuz</span>`;
+            historyIndicator.classList.remove('hidden');
+        }
+    }
+
     // Render question text with clickable words
     const questionText = document.getElementById('questionText');
     questionText.innerHTML = makeWordsClickable(q.question_text);
@@ -453,15 +718,38 @@ function showQuestion() {
     const optionsContainer = document.getElementById('optionsContainer');
     optionsContainer.innerHTML = '';
     
-    q.options.forEach(opt => {
+    // Extract options - handle nested structure
+    let options = q.options;
+    if (typeof options === 'string') {
+        try {
+            options = JSON.parse(options);
+        } catch (e) {
+            console.error('Failed to parse options:', e);
+            options = [];
+        }
+    }
+    // Handle nested options structure (options.options)
+    if (options && typeof options === 'object' && !Array.isArray(options)) {
+        if (Array.isArray(options.options)) {
+            options = options.options;
+        } else {
+            options = [];
+        }
+    }
+    if (!Array.isArray(options)) {
+        options = [];
+    }
+    
+    options.forEach(opt => {
         const optionDiv = document.createElement('div');
         optionDiv.className = 'option';
         optionDiv.dataset.letter = opt.letter;
         
-        // Seçim butonu ve metin yapısı
+        // Seçim butonu, metin ve üstü çiz butonu yapısı
         optionDiv.innerHTML = `
             <button class="option-select-btn" title="Cevabı Seç">${opt.letter}</button>
             <span class="text">${makeWordsClickable(opt.text)}</span>
+            <button class="option-strikethrough-btn" title="Üstünü Çiz">✕</button>
         `;
         
         // Sadece butona tıklayınca cevap seçilsin
@@ -469,6 +757,13 @@ function showQuestion() {
         selectBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             selectAnswer(opt.letter);
+        });
+        
+        // Üstü çiz butonu
+        const strikeBtn = optionDiv.querySelector('.option-strikethrough-btn');
+        strikeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            optionDiv.classList.toggle('struck-out');
         });
 
         optionsContainer.appendChild(optionDiv);
@@ -552,24 +847,38 @@ function timeUp() {
 
     currentQuiz.wrong++;
     
+    // Build explanation from database fields
+    const hasDbExplanation = q.explanation_tr || q.tip || q.question_tr;
+    let explanationHtml = '';
+    if (hasDbExplanation) {
+        explanationHtml = '<div class="db-explanation">';
+        if (q.tip) explanationHtml += `<p class="explanation-tip">💡 <strong>İpucu:</strong> ${q.tip}</p>`;
+        if (q.explanation_tr) explanationHtml += `<p class="explanation-text">📝 <strong>Açıklama:</strong> ${q.explanation_tr}</p>`;
+        if (q.question_tr) explanationHtml += `<p class="explanation-translation">🇹🇷 <strong>Türkçe:</strong> ${q.question_tr}</p>`;
+        explanationHtml += '</div>';
+    }
+    const gptButton = !hasDbExplanation ? `<button class="btn btn-small gpt-ask-btn" onclick="openGPTPanel()">🤖 GPT'den Açıklama İste</button>` : '';
+    
     // Show feedback
     const feedback = document.getElementById('feedback');
     feedback.classList.remove('hidden', 'correct', 'wrong');
     feedback.classList.add('wrong');
     feedback.innerHTML = `
         <p id="feedbackText">⏱️ Süre doldu! Doğru cevap: ${q.correct_answer}</p>
-        <button class="btn btn-small gpt-ask-btn" onclick="openGPTPanel()">
-            🤖 Açıklamayı Gör
-        </button>
+        ${explanationHtml}
+        ${gptButton}
     `;
     
     // Save wrong answer
     saveWrongAnswer(q, 'TIMEOUT');
     
-    // Auto-add GPT explanation to panel
-    if (typeof autoAddGPTExplanationOnWrong === 'function') {
-        autoAddGPTExplanationOnWrong(q, 'TIMEOUT');
-    }
+    // Save answer history
+    saveAnswerHistory(q, 'TIMEOUT', false);
+    
+    // GPT explanation disabled - user can click button manually if needed
+    // if (!hasDbExplanation && typeof autoAddGPTExplanationOnWrong === 'function') {
+    //     autoAddGPTExplanationOnWrong(q, 'TIMEOUT');
+    // }
     
     // Update stats
     updateStatsData(q.category, false);
@@ -629,30 +938,58 @@ function selectAnswer(letter) {
     const feedback = document.getElementById('feedback');
     feedback.classList.remove('hidden', 'correct', 'wrong');
     
+    // Build explanation from database fields
+    const hasDbExplanation = q.explanation_tr || q.tip || q.question_tr;
+    let explanationHtml = '';
+    if (hasDbExplanation) {
+        explanationHtml = '<div class="db-explanation">';
+        if (q.tip) {
+            explanationHtml += `<p class="explanation-tip">💡 <strong>İpucu:</strong> ${q.tip}</p>`;
+        }
+        if (q.explanation_tr) {
+            explanationHtml += `<p class="explanation-text">📝 <strong>Açıklama:</strong> ${q.explanation_tr}</p>`;
+        }
+        if (q.question_tr) {
+            explanationHtml += `<p class="explanation-translation">🇹🇷 <strong>Türkçe:</strong> ${q.question_tr}</p>`;
+        }
+        if (q.difficulty) {
+            const difficultyLabels = { easy: '🟢 Kolay', medium: '🟡 Orta', hard: '🔴 Zor' };
+            explanationHtml += `<p class="explanation-difficulty"><strong>Zorluk:</strong> ${difficultyLabels[q.difficulty] || q.difficulty}</p>`;
+        }
+        explanationHtml += '</div>';
+    }
+    
     if (isCorrect) {
         currentQuiz.correct++;
         feedback.classList.add('correct');
-        feedback.innerHTML = `<p id="feedbackText">✓ Doğru!</p>`;
+        feedback.innerHTML = `<p id="feedbackText">✓ Doğru!</p>${explanationHtml}`;
         playSound('correct');
     } else {
         currentQuiz.wrong++;
         feedback.classList.add('wrong');
+        const gptButton = !hasDbExplanation ? `
+            <button class="btn btn-small gpt-ask-btn" onclick="openGPTPanel()">
+                🤖 GPT'den Açıklama İste
+            </button>
+        ` : '';
         feedback.innerHTML = `
             <p id="feedbackText">✗ Yanlış! Doğru cevap: ${q.correct_answer}</p>
-            <button class="btn btn-small gpt-ask-btn" onclick="openGPTPanel()">
-                🤖 Açıklamayı Gör
-            </button>
+            ${explanationHtml}
+            ${gptButton}
         `;
         playSound('wrong');
         
         // Save wrong answer
         saveWrongAnswer(q, letter);
         
-        // Auto-add GPT explanation to panel
-        if (typeof autoAddGPTExplanationOnWrong === 'function') {
-            autoAddGPTExplanationOnWrong(q, letter);
-        }
+        // GPT explanation disabled - user can click button manually if needed
+        // if (!hasDbExplanation && typeof autoAddGPTExplanationOnWrong === 'function') {
+        //     autoAddGPTExplanationOnWrong(q, letter);
+        // }
     }
+
+    // Save answer history
+    saveAnswerHistory(q, letter, isCorrect);
 
     // Update stats
     updateStatsData(q.category, isCorrect);
@@ -720,6 +1057,9 @@ function saveWrongAnswer(question, userAnswer) {
             timestamp: new Date().toISOString()
         });
         localStorage.setItem(STORAGE_KEYS.WRONG_ANSWERS, JSON.stringify(wrongAnswers));
+        
+        // Sync to API for logged-in users
+        syncWrongAnswer(question, userAnswer);
     }
 }
 
@@ -730,9 +1070,19 @@ function removeWrongAnswer(index) {
     renderWrongAnswers();
 }
 
-function clearWrongAnswers() {
+async function clearWrongAnswers() {
     if (confirm('Tüm yanlış cevapları silmek istediğinize emin misiniz?')) {
         localStorage.setItem(STORAGE_KEYS.WRONG_ANSWERS, '[]');
+        
+        // Clear from API for logged-in users
+        if (isLoggedIn()) {
+            try {
+                await fetch(`${API_URL}/user/${currentUser.id}/wrong-answers`, { method: 'DELETE' });
+            } catch (error) {
+                console.error('Clear wrong answers API error:', error);
+            }
+        }
+        
         renderWrongAnswers();
     }
 }
@@ -769,6 +1119,94 @@ function renderWrongAnswers() {
     `).join('');
 }
 
+// ==================== ANSWER HISTORY ====================
+function getAnswerHistory() {
+    return JSON.parse(localStorage.getItem(STORAGE_KEYS.ANSWER_HISTORY) || '{}');
+}
+
+function getQuestionKey(question) {
+    // Create a unique key for the question based on its text
+    return btoa(unescape(encodeURIComponent(question.question_text.substring(0, 100)))).replace(/[^a-zA-Z0-9]/g, '');
+}
+
+function saveAnswerHistory(question, userAnswer, isCorrect) {
+    const history = getAnswerHistory();
+    const key = getQuestionKey(question);
+    
+    if (!history[key]) {
+        history[key] = {
+            questionId: question.id,
+            questionText: question.question_text.substring(0, 100),
+            category: question.category,
+            attempts: []
+        };
+    }
+    
+    history[key].attempts.push({
+        userAnswer,
+        isCorrect,
+        timestamp: new Date().toISOString()
+    });
+    
+    // Keep last status for quick filtering
+    history[key].lastCorrect = isCorrect;
+    history[key].totalAttempts = history[key].attempts.length;
+    history[key].correctCount = history[key].attempts.filter(a => a.isCorrect).length;
+    history[key].wrongCount = history[key].attempts.filter(a => !a.isCorrect).length;
+    
+    localStorage.setItem(STORAGE_KEYS.ANSWER_HISTORY, JSON.stringify(history));
+    
+    // Sync to API for logged-in users
+    syncAnswerHistory(question, userAnswer, isCorrect);
+}
+
+function getQuestionHistory(question) {
+    const history = getAnswerHistory();
+    const key = getQuestionKey(question);
+    return history[key] || null;
+}
+
+function filterQuestionsByHistory(questions, filterType) {
+    const history = getAnswerHistory();
+    
+    return questions.filter(q => {
+        const key = getQuestionKey(q);
+        const questionHistory = history[key];
+        
+        switch (filterType) {
+            case 'unsolved':
+                // Never attempted
+                return !questionHistory;
+            case 'wrong':
+                // Last attempt was wrong
+                return questionHistory && !questionHistory.lastCorrect;
+            case 'exclude_correct':
+                // Not solved correctly (unsolved OR last was wrong)
+                return !questionHistory || !questionHistory.lastCorrect;
+            case 'all':
+            default:
+                return true;
+        }
+    });
+}
+
+async function clearAnswerHistory() {
+    if (confirm('Tüm cevap geçmişini silmek istediğinize emin misiniz?')) {
+        localStorage.setItem(STORAGE_KEYS.ANSWER_HISTORY, '{}');
+        
+        // Clear from API for logged-in users
+        if (isLoggedIn()) {
+            try {
+                await fetch(`${API_URL}/user/${currentUser.id}/answer-history`, { method: 'DELETE' });
+            } catch (error) {
+                console.error('Clear answer history API error:', error);
+            }
+        }
+        
+        alert('Cevap geçmişi silindi.');
+    }
+}
+
 // Unknown Words
 function getUnknownWords() {
     return JSON.parse(localStorage.getItem(STORAGE_KEYS.UNKNOWN_WORDS) || '[]');
@@ -777,14 +1215,18 @@ function getUnknownWords() {
 function toggleUnknownWord(word) {
     const words = getUnknownWords();
     const index = words.indexOf(word.toLowerCase());
+    const isAdding = index === -1;
     
-    if (index === -1) {
+    if (isAdding) {
         words.push(word.toLowerCase());
     } else {
         words.splice(index, 1);
     }
     
     localStorage.setItem(STORAGE_KEYS.UNKNOWN_WORDS, JSON.stringify(words));
+    
+    // Sync to API for logged-in users
+    syncUnknownWord(word.toLowerCase(), isAdding);
 }
 
 function removeUnknownWord(word) {
@@ -793,13 +1235,26 @@ function removeUnknownWord(word) {
     if (index !== -1) {
         words.splice(index, 1);
         localStorage.setItem(STORAGE_KEYS.UNKNOWN_WORDS, JSON.stringify(words));
+        
+        // Sync to API for logged-in users
+        syncUnknownWord(word, false);
     }
     renderUnknownWords();
 }
 
-function clearUnknownWords() {
+async function clearUnknownWords() {
     if (confirm('Tüm bilmediğiniz kelimeleri silmek istediğinize emin misiniz?')) {
         localStorage.setItem(STORAGE_KEYS.UNKNOWN_WORDS, '[]');
+        
+        // Clear from API for logged-in users
+        if (isLoggedIn()) {
+            try {
+                await fetch(`${API_URL}/user/${currentUser.id}/unknown-words`, { method: 'DELETE' });
+            } catch (error) {
+                console.error('Clear unknown words API error:', error);
+            }
+        }
+        
         renderUnknownWords();
     }
 }
@@ -937,6 +1392,9 @@ function updateDailyStats() {
     // Update streak
     updateStreak();
     updateGoalDisplay();
+    
+    // Sync to API for logged-in users
+    syncDailyStats();
 }
 
 function updateDailyCorrect() {
@@ -949,6 +1407,9 @@ function updateDailyCorrect() {
     dailyStats[today].correct++;
     
     localStorage.setItem(STORAGE_KEYS.DAILY_STATS, JSON.stringify(dailyStats));
+    
+    // Sync to API for logged-in users
+    syncDailyStats();
 }
 
 function updateStreak() {
@@ -1063,8 +1524,9 @@ function toggleFavorite() {
     const q = currentQuiz.questions[currentQuiz.currentIndex];
     const favorites = getFavorites();
     const index = favorites.findIndex(f => f.question_text === q.question_text);
+    const isAdding = index === -1;
     
-    if (index === -1) {
+    if (isAdding) {
         favorites.push(q);
     } else {
         favorites.splice(index, 1);
@@ -1072,6 +1534,9 @@ function toggleFavorite() {
     
     localStorage.setItem(STORAGE_KEYS.FAVORITES, JSON.stringify(favorites));
     updateFavoriteButton();
+    
+    // Sync to API for logged-in users
+    syncFavorite(q, isAdding);
 }
 
 function updateFavoriteButton() {
@@ -1090,14 +1555,31 @@ function updateFavoriteButton() {
 
 function removeFavorite(index) {
     const favorites = getFavorites();
+    const removedQuestion = favorites[index];
     favorites.splice(index, 1);
     localStorage.setItem(STORAGE_KEYS.FAVORITES, JSON.stringify(favorites));
+    
+    // Sync to API for logged-in users
+    if (removedQuestion) {
+        syncFavorite(removedQuestion, false);
+    }
+    
     renderFavorites();
 }
 
-function clearFavorites() {
+async function clearFavorites() {
     if (confirm('Tüm favorileri silmek istediğinize emin misiniz?')) {
         localStorage.setItem(STORAGE_KEYS.FAVORITES, '[]');
+        
+        // Clear from API for logged-in users
+        if (isLoggedIn()) {
+            try {
+                await fetch(`${API_URL}/user/${currentUser.id}/favorites/all`, { method: 'DELETE' });
+            } catch (error) {
+                console.error('Clear favorites API error:', error);
+            }
+        }
+        
         renderFavorites();
     }
 }
@@ -1438,7 +1920,8 @@ let examState = {
     timerInterval: null,
     totalTime: 150 * 60, // 150 minutes in seconds
     timeRemaining: 150 * 60,
-    startTime: null
+    startTime: null,
+    examSize: 'full' // mini, medium, full
 };
 
 function initExamEventListeners() {
@@ -1448,12 +1931,90 @@ function initExamEventListeners() {
     document.getElementById('examNextQ').addEventListener('click', examNextQuestion);
     document.getElementById('newExam').addEventListener('click', resetExam);
     document.getElementById('reviewExam').addEventListener('click', reviewExam);
+    
+    // Exam size selector listeners
+    document.querySelectorAll('input[name="examSize"]').forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            updateExamDistributionPreview(e.target.value);
+        });
+    });
+    
+    // Initialize distribution preview
+    updateExamDistributionPreview('full');
+}
+
+// Update distribution preview when exam size changes
+function updateExamDistributionPreview(size) {
+    const container = document.getElementById('examDistributionPreview');
+    if (!container) return;
+    
+    const distribution = YDS_DISTRIBUTION[size];
+    if (!distribution) return;
+    
+    const total = Object.values(distribution).reduce((a, b) => a + b, 0);
+    
+    container.innerHTML = Object.entries(distribution).map(([cat, count]) => {
+        const shortName = cat.replace('YDS ', '').replace(' Soruları', '');
+        return `
+            <div class="distribution-item">
+                <span class="cat-name" title="${cat}">${shortName}</span>
+                <span class="cat-count">${count}</span>
+            </div>
+        `;
+    }).join('') + `
+        <div class="distribution-item" style="background: var(--accent-glow);">
+            <span class="cat-name"><strong>Toplam</strong></span>
+            <span class="cat-count"><strong>${total}</strong></span>
+        </div>
+    `;
+}
+
+// Gerçek YDS dağılımına göre soru seç
+function selectQuestionsWithYDSDistribution(allQuestions, examSize = 'full') {
+    const distribution = YDS_DISTRIBUTION[examSize];
+    const selectedQuestions = [];
+    
+    // Her YDS kategorisi için soruları grupla
+    const questionsByCategory = {};
+    
+    for (const [ydsCategory, dbCategories] of Object.entries(CATEGORY_MAPPING)) {
+        questionsByCategory[ydsCategory] = allQuestions.filter(q => 
+            dbCategories.some(dbCat => q.category === dbCat || q.category?.includes(dbCat))
+        );
+    }
+    
+    // Dağılıma göre seç
+    for (const [category, count] of Object.entries(distribution)) {
+        const available = questionsByCategory[category] || [];
+        const shuffled = shuffleArray([...available]);
+        const selected = shuffled.slice(0, count);
+        selectedQuestions.push(...selected);
+    }
+    
+    // Eksik varsa diğer sorulardan tamamla
+    const targetCount = Object.values(distribution).reduce((a, b) => a + b, 0);
+    if (selectedQuestions.length < targetCount) {
+        const selectedIds = new Set(selectedQuestions.map(q => q.id));
+        const remaining = allQuestions.filter(q => !selectedIds.has(q.id));
+        const shuffledRemaining = shuffleArray([...remaining]);
+        const needed = targetCount - selectedQuestions.length;
+        selectedQuestions.push(...shuffledRemaining.slice(0, needed));
+    }
+    
+    // Son karıştırma
+    return shuffleArray(selectedQuestions);
 }
 
 function startExam() {
-    // Get 80 random questions from all categories
-    const shuffled = shuffleArray([...allQuestions]);
-    examState.questions = shuffled.slice(0, Math.min(80, shuffled.length));
+    // Get selected exam size
+    const selectedSize = document.querySelector('input[name="examSize"]:checked')?.value || 'full';
+    examState.examSize = selectedSize;
+    
+    // Select questions with YDS distribution
+    examState.questions = selectQuestionsWithYDSDistribution(allQuestions, selectedSize);
+    
+    // Set time limit based on exam size
+    examState.totalTime = EXAM_TIME_LIMITS[selectedSize];
     examState.answers = new Array(examState.questions.length).fill(null);
     examState.currentIndex = 0;
     examState.timeRemaining = examState.totalTime;
@@ -1507,20 +2068,57 @@ function showExamQuestion() {
     const optionsContainer = document.getElementById('examOptionsContainer');
     optionsContainer.innerHTML = '';
     
-    q.options.forEach(opt => {
+    // Extract options - handle nested structure
+    let options = q.options;
+    if (typeof options === 'string') {
+        try { options = JSON.parse(options); } catch (e) { options = []; }
+    }
+    if (options && typeof options === 'object' && !Array.isArray(options)) {
+        options = Array.isArray(options.options) ? options.options : [];
+    }
+    if (!Array.isArray(options)) options = [];
+    
+    options.forEach(opt => {
         const optionDiv = document.createElement('div');
         optionDiv.className = 'option';
         if (examState.answers[examState.currentIndex] === opt.letter) {
             optionDiv.classList.add('selected');
+        }
+        // Restore struck-out state if exists
+        if (examState.struckOut && examState.struckOut[examState.currentIndex]?.includes(opt.letter)) {
+            optionDiv.classList.add('struck-out');
         }
         optionDiv.dataset.letter = opt.letter;
         
         optionDiv.innerHTML = `
             <button class="option-select-btn" title="Cevabı Seç">${opt.letter}</button>
             <span class="text">${opt.text}</span>
+            <button class="option-strikethrough-btn" title="Üstünü Çiz">✕</button>
         `;
         
-        optionDiv.addEventListener('click', () => selectExamAnswer(opt.letter));
+        // Select button click
+        const selectBtn = optionDiv.querySelector('.option-select-btn');
+        selectBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            selectExamAnswer(opt.letter);
+        });
+        
+        // Strikethrough button click
+        const strikeBtn = optionDiv.querySelector('.option-strikethrough-btn');
+        strikeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            optionDiv.classList.toggle('struck-out');
+            // Save struck-out state
+            if (!examState.struckOut) examState.struckOut = {};
+            if (!examState.struckOut[examState.currentIndex]) examState.struckOut[examState.currentIndex] = [];
+            const idx = examState.struckOut[examState.currentIndex].indexOf(opt.letter);
+            if (idx === -1) {
+                examState.struckOut[examState.currentIndex].push(opt.letter);
+            } else {
+                examState.struckOut[examState.currentIndex].splice(idx, 1);
+            }
+        });
+        
         optionsContainer.appendChild(optionDiv);
     });
 
@@ -1701,7 +2299,17 @@ function showExamReviewQuestion() {
     const optionsContainer = document.getElementById('examOptionsContainer');
     optionsContainer.innerHTML = '';
     
-    q.options.forEach(opt => {
+    // Extract options - handle nested structure
+    let options = q.options;
+    if (typeof options === 'string') {
+        try { options = JSON.parse(options); } catch (e) { options = []; }
+    }
+    if (options && typeof options === 'object' && !Array.isArray(options)) {
+        options = Array.isArray(options.options) ? options.options : [];
+    }
+    if (!Array.isArray(options)) options = [];
+    
+    options.forEach(opt => {
         const optionDiv = document.createElement('div');
         optionDiv.className = 'option disabled';
         optionDiv.dataset.letter = opt.letter;

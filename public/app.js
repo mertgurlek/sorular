@@ -2604,7 +2604,20 @@ const challengeState = {
     pollInterval: null,
     status: 'idle', // idle, waiting, active, finished
     selectedCategories: [],
-    answers: []
+    answers: [],
+    selectedMode: null,
+    categoryQuestions: {},
+    availableCategories: [],
+    timeLimit: 30,
+    enableLives: false,
+    maxLives: 3,
+    lives: 3,
+    score: 0,
+    streak: 0,
+    questionStartTime: null,
+    timerInterval: null,
+    friendsData: { friends: [], pending: [], sent: [] },
+    currentFriendsTab: 'friends'
 };
 
 function initChallengeEventListeners() {
@@ -2632,10 +2645,32 @@ function initChallengeEventListeners() {
     // Game
     document.getElementById('challengeNextBtn')?.addEventListener('click', nextChallengeQuestion);
     document.getElementById('endChallengeEarly')?.addEventListener('click', endChallengeEarly);
+    document.getElementById('challengeMarkUnknown')?.addEventListener('click', markUnknownWordInChallenge);
     
     // Results
     document.getElementById('backToChallengeMenu')?.addEventListener('click', backToChallengeMenu);
     document.getElementById('viewChallengeDetails')?.addEventListener('click', viewChallengeDetails);
+    
+    // Quick actions - Friends, Badges, Leaderboard
+    document.getElementById('showFriendsBtn')?.addEventListener('click', showFriendsPanel);
+    document.getElementById('showBadgesBtn')?.addEventListener('click', showBadgesPanel);
+    document.getElementById('showLeaderboardBtn')?.addEventListener('click', showLeaderboardPanel);
+    
+    // Panel close buttons
+    document.getElementById('closeFriendsPanel')?.addEventListener('click', showChallengeMenu);
+    document.getElementById('closeBadgesPanel')?.addEventListener('click', showChallengeMenu);
+    document.getElementById('closeLeaderboardPanel')?.addEventListener('click', showChallengeMenu);
+    
+    // Friends
+    document.getElementById('sendFriendRequest')?.addEventListener('click', sendFriendRequest);
+    document.querySelectorAll('.friend-tab').forEach(tab => {
+        tab.addEventListener('click', () => switchFriendsTab(tab.dataset.tab));
+    });
+    
+    // Game settings
+    document.getElementById('enableLivesCheck')?.addEventListener('change', (e) => {
+        document.getElementById('livesSettingRow').classList.toggle('hidden', !e.target.checked);
+    });
 }
 
 // Initialize on DOM load
@@ -2645,6 +2680,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function showChallengeMenu() {
     stopPolling();
+    stopTimer();
     challengeState.status = 'idle';
     
     document.getElementById('challenge-menu').classList.remove('hidden');
@@ -2653,9 +2689,323 @@ function showChallengeMenu() {
     document.getElementById('waiting-room').classList.add('hidden');
     document.getElementById('challenge-game').classList.add('hidden');
     document.getElementById('challenge-results').classList.add('hidden');
+    document.getElementById('friends-panel')?.classList.add('hidden');
+    document.getElementById('badges-panel')?.classList.add('hidden');
+    document.getElementById('leaderboard-panel')?.classList.add('hidden');
     
     loadChallengeHistory();
     loadChallengeCategoryGrid();
+    loadUserChallengeStats();
+}
+
+// ==================== USER STATS ====================
+async function loadUserChallengeStats() {
+    if (!currentUser || currentUser.isGuest) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/challenge-stats/${currentUser.id}`);
+        const data = await response.json();
+        
+        if (data.success && data.stats) {
+            document.getElementById('userElo').textContent = data.stats.elo_rating || 1000;
+            document.getElementById('userRank').textContent = data.rank ? `#${data.rank}` : '-';
+            document.getElementById('userGames').textContent = data.stats.total_games || 0;
+            document.getElementById('userWins').textContent = data.stats.total_wins || 0;
+        }
+    } catch (error) {
+        console.error('Failed to load challenge stats:', error);
+    }
+}
+
+// ==================== FRIENDS SYSTEM ====================
+function showFriendsPanel() {
+    if (!currentUser || currentUser.isGuest) {
+        alert('Arkadaş eklemek için giriş yapmalısınız.');
+        return;
+    }
+    
+    document.getElementById('challenge-menu').classList.add('hidden');
+    document.getElementById('friends-panel').classList.remove('hidden');
+    loadFriends();
+}
+
+async function loadFriends() {
+    if (!currentUser) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/friends/${currentUser.id}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            challengeState.friendsData = data;
+            renderFriendsList();
+        }
+    } catch (error) {
+        console.error('Failed to load friends:', error);
+    }
+}
+
+function switchFriendsTab(tab) {
+    challengeState.currentFriendsTab = tab;
+    document.querySelectorAll('.friend-tab').forEach(t => t.classList.remove('active'));
+    document.querySelector(`.friend-tab[data-tab="${tab}"]`)?.classList.add('active');
+    renderFriendsList();
+}
+
+function renderFriendsList() {
+    const list = document.getElementById('friendsList');
+    const tab = challengeState.currentFriendsTab;
+    const data = challengeState.friendsData[tab] || [];
+    
+    if (data.length === 0) {
+        const messages = {
+            friends: 'Henüz arkadaşınız yok.',
+            pending: 'Bekleyen istek yok.',
+            sent: 'Gönderilen istek yok.'
+        };
+        list.innerHTML = `<p class="empty-state">${messages[tab]}</p>`;
+        return;
+    }
+    
+    list.innerHTML = data.map(friend => `
+        <div class="friend-item">
+            <div class="friend-info">
+                <div class="friend-avatar">${friend.username.charAt(0).toUpperCase()}</div>
+                <span>${friend.username}</span>
+            </div>
+            <div class="friend-actions">
+                ${tab === 'pending' ? `
+                    <button class="btn btn-success btn-small" onclick="respondFriendRequest(${friend.id}, true)">✓</button>
+                    <button class="btn btn-danger btn-small" onclick="respondFriendRequest(${friend.id}, false)">✗</button>
+                ` : tab === 'friends' ? `
+                    <button class="btn btn-secondary btn-small" onclick="removeFriend(${friend.id})">Çıkar</button>
+                ` : `
+                    <span class="text-secondary">Bekliyor...</span>
+                `}
+            </div>
+        </div>
+    `).join('');
+}
+
+async function sendFriendRequest() {
+    const username = document.getElementById('friendUsername').value.trim();
+    if (!username) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/friends/request`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: currentUser.id, friendUsername: username })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            document.getElementById('friendUsername').value = '';
+            alert('Arkadaşlık isteği gönderildi!');
+            loadFriends();
+        } else {
+            alert(data.error || 'İstek gönderilemedi');
+        }
+    } catch (error) {
+        console.error('Friend request error:', error);
+        alert('Bir hata oluştu');
+    }
+}
+
+async function respondFriendRequest(friendId, accept) {
+    try {
+        await fetch(`${API_URL}/friends/respond`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: currentUser.id, friendId, accept })
+        });
+        loadFriends();
+    } catch (error) {
+        console.error('Friend respond error:', error);
+    }
+}
+
+async function removeFriend(friendId) {
+    if (!confirm('Bu arkadaşı çıkarmak istediğinize emin misiniz?')) return;
+    
+    try {
+        await fetch(`${API_URL}/friends/${currentUser.id}/${friendId}`, { method: 'DELETE' });
+        loadFriends();
+    } catch (error) {
+        console.error('Remove friend error:', error);
+    }
+}
+
+// Make functions globally accessible
+window.respondFriendRequest = respondFriendRequest;
+window.removeFriend = removeFriend;
+
+// ==================== BADGES SYSTEM ====================
+function showBadgesPanel() {
+    if (!currentUser || currentUser.isGuest) {
+        alert('Rozetleri görmek için giriş yapmalısınız.');
+        return;
+    }
+    
+    document.getElementById('challenge-menu').classList.add('hidden');
+    document.getElementById('badges-panel').classList.remove('hidden');
+    loadBadges();
+}
+
+async function loadBadges() {
+    try {
+        const response = await fetch(`${API_URL}/badges/${currentUser.id}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            renderBadges(data.allBadges);
+        }
+    } catch (error) {
+        console.error('Failed to load badges:', error);
+    }
+}
+
+function renderBadges(badges) {
+    const list = document.getElementById('badgesList');
+    
+    list.innerHTML = badges.map(badge => `
+        <div class="badge-item ${badge.earned ? 'earned' : 'locked'}">
+            <div class="badge-icon">${badge.icon}</div>
+            <div class="badge-name">${badge.name}</div>
+            <div class="badge-desc">${badge.description}</div>
+        </div>
+    `).join('');
+}
+
+// ==================== LEADERBOARD ====================
+function showLeaderboardPanel() {
+    document.getElementById('challenge-menu').classList.add('hidden');
+    document.getElementById('leaderboard-panel').classList.remove('hidden');
+    loadLeaderboard();
+}
+
+async function loadLeaderboard() {
+    try {
+        const response = await fetch(`${API_URL}/leaderboard`);
+        const data = await response.json();
+        
+        if (data.success) {
+            renderLeaderboard(data.leaderboard);
+        }
+    } catch (error) {
+        console.error('Failed to load leaderboard:', error);
+    }
+}
+
+function renderLeaderboard(leaderboard) {
+    const list = document.getElementById('leaderboardList');
+    
+    if (leaderboard.length === 0) {
+        list.innerHTML = '<p class="empty-state">Henüz sıralama yok.</p>';
+        return;
+    }
+    
+    list.innerHTML = leaderboard.map((user, index) => {
+        const rankClass = index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? 'bronze' : '';
+        const isCurrentUser = currentUser && user.user_id === currentUser.id;
+        
+        return `
+            <div class="leaderboard-row ${index < 3 ? 'top-3' : ''} ${isCurrentUser ? 'current-user' : ''}">
+                <div class="leaderboard-rank ${rankClass}">${index < 3 ? ['🥇', '🥈', '🥉'][index] : `#${index + 1}`}</div>
+                <div class="leaderboard-user">
+                    <div class="friend-avatar">${user.username.charAt(0).toUpperCase()}</div>
+                    <span>${user.username}</span>
+                </div>
+                <div class="leaderboard-stats">
+                    <span>🎯 ${user.elo_rating}</span>
+                    <span>🏆 ${user.total_wins}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// ==================== TIMER SYSTEM ====================
+function startTimer(seconds) {
+    if (!seconds || seconds <= 0) return;
+    
+    challengeState.questionStartTime = Date.now();
+    let remaining = seconds;
+    
+    const timerDisplay = document.createElement('div');
+    timerDisplay.id = 'gameTimer';
+    timerDisplay.className = 'timer-display';
+    timerDisplay.style.display = 'block';
+    document.body.appendChild(timerDisplay);
+    
+    updateTimerDisplay(remaining);
+    
+    challengeState.timerInterval = setInterval(() => {
+        remaining--;
+        updateTimerDisplay(remaining);
+        
+        if (remaining <= 0) {
+            stopTimer();
+            // Auto-submit empty answer if time runs out
+            if (!challengeState.hasAnswered) {
+                submitChallengeAnswer(null);
+            }
+        }
+    }, 1000);
+}
+
+function updateTimerDisplay(seconds) {
+    const timer = document.getElementById('gameTimer');
+    if (!timer) return;
+    
+    timer.textContent = `⏱️ ${seconds}s`;
+    timer.classList.remove('warning', 'danger');
+    
+    if (seconds <= 5) {
+        timer.classList.add('danger');
+    } else if (seconds <= 10) {
+        timer.classList.add('warning');
+    }
+}
+
+function stopTimer() {
+    if (challengeState.timerInterval) {
+        clearInterval(challengeState.timerInterval);
+        challengeState.timerInterval = null;
+    }
+    document.getElementById('gameTimer')?.remove();
+}
+
+function getAnswerTime() {
+    if (!challengeState.questionStartTime) return 0;
+    return Date.now() - challengeState.questionStartTime;
+}
+
+// ==================== SCORE POPUP ====================
+function showScorePopup(points, streak) {
+    const popup = document.createElement('div');
+    popup.className = 'score-popup';
+    popup.innerHTML = `+${points} puan${streak > 1 ? ` 🔥${streak} streak!` : ''}`;
+    document.body.appendChild(popup);
+    
+    setTimeout(() => popup.remove(), 1000);
+}
+
+// Mark unknown word in challenge mode
+function markUnknownWordInChallenge() {
+    if (!challengeState.currentQuestion) {
+        alert('Önce bir soru yüklenmeli');
+        return;
+    }
+    
+    const questionText = challengeState.currentQuestion.question_text;
+    const word = prompt('İşaretlemek istediğiniz kelimeyi girin:');
+    
+    if (word && word.trim()) {
+        addUnknownWord(word.trim(), questionText);
+        alert(`"${word.trim()}" bilinmeyen kelimeler listesine eklendi!`);
+    }
 }
 
 function showCreateRoomForm() {
@@ -2664,12 +3014,50 @@ function showCreateRoomForm() {
         return;
     }
     
+    // Hide ALL challenge screens first
     document.getElementById('challenge-menu').classList.add('hidden');
+    document.getElementById('challenge-results').classList.add('hidden');
+    document.getElementById('challenge-game').classList.add('hidden');
+    document.getElementById('waiting-room').classList.add('hidden');
+    document.getElementById('join-room-form').classList.add('hidden');
+    document.getElementById('friends-panel')?.classList.add('hidden');
+    document.getElementById('badges-panel')?.classList.add('hidden');
+    document.getElementById('leaderboard-panel')?.classList.add('hidden');
+    
+    // Show create form
     document.getElementById('create-room-form').classList.remove('hidden');
     
-    challengeState.selectedCategories = [];
+    challengeState.selectedMode = null;
+    challengeState.categoryQuestions = {};
     document.getElementById('createRoomSubmit').disabled = true;
+    document.getElementById('customCategorySection').classList.add('hidden');
+    
+    // Reset mode buttons
+    document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('selected'));
+    
+    initModeSelector();
     loadChallengeCategoryGrid();
+}
+
+function initModeSelector() {
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            // Remove selected from all
+            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+            
+            challengeState.selectedMode = btn.dataset.mode;
+            
+            // Show/hide custom category section
+            if (btn.dataset.mode === 'custom') {
+                document.getElementById('customCategorySection').classList.remove('hidden');
+                updateCreateButtonState();
+            } else {
+                document.getElementById('customCategorySection').classList.add('hidden');
+                document.getElementById('createRoomSubmit').disabled = false;
+            }
+        });
+    });
 }
 
 function showJoinRoomForm() {
@@ -2689,28 +3077,52 @@ async function loadChallengeCategoryGrid() {
         
         if (!data.success) return;
         
+        challengeState.availableCategories = data.categories;
+        
         grid.innerHTML = data.categories.map(cat => `
-            <button class="category-btn" data-category="${cat.category}">
-                ${cat.category}
-                <span class="count">${cat.count} soru</span>
-            </button>
+            <div class="category-select-item" data-category="${cat.category}">
+                <div class="category-select-info">
+                    <span class="category-select-name">${cat.category}</span>
+                    <span class="category-select-available">${cat.count} soru mevcut</span>
+                </div>
+                <input type="number" class="category-select-input" 
+                       data-category="${cat.category}" 
+                       data-max="${cat.count}"
+                       min="0" max="${cat.count}" value="0" 
+                       placeholder="0">
+            </div>
         `).join('');
         
-        // Add click listeners
-        grid.querySelectorAll('.category-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                btn.classList.toggle('selected');
-                const category = btn.dataset.category;
+        // Add input listeners
+        grid.querySelectorAll('.category-select-input').forEach(input => {
+            input.addEventListener('change', (e) => {
+                const category = e.target.dataset.category;
+                const max = parseInt(e.target.dataset.max);
+                let value = parseInt(e.target.value) || 0;
                 
-                if (btn.classList.contains('selected')) {
-                    if (!challengeState.selectedCategories.includes(category)) {
-                        challengeState.selectedCategories.push(category);
-                    }
+                // Clamp value
+                value = Math.max(0, Math.min(max, value));
+                e.target.value = value;
+                
+                challengeState.categoryQuestions[category] = value;
+                
+                // Update item styling
+                const item = e.target.closest('.category-select-item');
+                if (value > 0) {
+                    item.classList.add('has-questions');
                 } else {
-                    challengeState.selectedCategories = challengeState.selectedCategories.filter(c => c !== category);
+                    item.classList.remove('has-questions');
                 }
                 
-                document.getElementById('createRoomSubmit').disabled = challengeState.selectedCategories.length === 0;
+                updateTotalQuestions();
+                updateCreateButtonState();
+            });
+            
+            input.addEventListener('input', (e) => {
+                const category = e.target.dataset.category;
+                const value = parseInt(e.target.value) || 0;
+                challengeState.categoryQuestions[category] = value;
+                updateTotalQuestions();
             });
         });
     } catch (error) {
@@ -2718,26 +3130,58 @@ async function loadChallengeCategoryGrid() {
     }
 }
 
+function updateTotalQuestions() {
+    const total = Object.values(challengeState.categoryQuestions).reduce((sum, val) => sum + (val || 0), 0);
+    document.getElementById('totalSelectedQuestions').textContent = total;
+}
+
+function updateCreateButtonState() {
+    if (challengeState.selectedMode === 'custom') {
+        const total = Object.values(challengeState.categoryQuestions).reduce((sum, val) => sum + (val || 0), 0);
+        document.getElementById('createRoomSubmit').disabled = total === 0;
+    } else {
+        document.getElementById('createRoomSubmit').disabled = !challengeState.selectedMode;
+    }
+}
+
 async function createRoom() {
     const name = document.getElementById('roomName').value.trim() || `${currentUser.username}'in Odası`;
-    const questionCount = parseInt(document.getElementById('challengeQuestionCount').value);
     
-    if (challengeState.selectedCategories.length === 0) {
-        alert('En az bir kategori seçmelisiniz.');
+    if (!challengeState.selectedMode) {
+        alert('Lütfen bir yarışma modu seçin.');
         return;
+    }
+    
+    // Get game settings
+    const timeLimit = parseInt(document.getElementById('timeLimitSelect')?.value) || 0;
+    const enableLives = document.getElementById('enableLivesCheck')?.checked || false;
+    const maxLives = parseInt(document.getElementById('maxLivesSelect')?.value) || 3;
+    
+    let requestBody = {
+        name,
+        adminId: currentUser.id,
+        adminName: currentUser.username,
+        timeLimit,
+        enableLives,
+        maxLives
+    };
+    
+    if (challengeState.selectedMode === 'custom') {
+        const totalQuestions = Object.values(challengeState.categoryQuestions).reduce((sum, val) => sum + (val || 0), 0);
+        if (totalQuestions === 0) {
+            alert('En az bir kategoriden soru seçmelisiniz.');
+            return;
+        }
+        requestBody.categoryQuestions = challengeState.categoryQuestions;
+    } else {
+        requestBody.mode = challengeState.selectedMode;
     }
     
     try {
         const response = await fetch(`${API_URL}/rooms/create`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                name,
-                adminId: currentUser.id,
-                adminName: currentUser.username,
-                questionCount,
-                categories: challengeState.selectedCategories
-            })
+            body: JSON.stringify(requestBody)
         });
         
         const data = await response.json();
@@ -2753,6 +3197,12 @@ async function createRoom() {
         challengeState.username = currentUser.username;
         challengeState.totalQuestions = data.room.actualQuestionCount;
         challengeState.status = 'waiting';
+        challengeState.timeLimit = timeLimit;
+        challengeState.enableLives = enableLives;
+        challengeState.maxLives = maxLives;
+        challengeState.lives = maxLives;
+        challengeState.score = 0;
+        challengeState.streak = 0;
         
         showWaitingRoom(data.room);
         startPolling();
@@ -2947,12 +3397,25 @@ function updateChallengeGame(data) {
     const { room, participants, currentQuestion, answers } = data;
     
     challengeState.participants = participants;
+    
+    // Check if question changed - reset answer state
+    const questionChanged = challengeState.currentQuestionIndex !== room.current_question_index;
+    if (questionChanged) {
+        console.log('Question changed from', challengeState.currentQuestionIndex, 'to', room.current_question_index);
+        challengeState.hasAnswered = false;
+        challengeState.selectedAnswer = null;
+        // Hide waiting and reveal sections
+        document.getElementById('challengeWaitingOthers')?.classList.add('hidden');
+        document.getElementById('challengeAnswersReveal')?.classList.add('hidden');
+        document.getElementById('challengeQuestionSection')?.classList.remove('hidden');
+    }
+    
     challengeState.currentQuestionIndex = room.current_question_index;
     challengeState.answers = answers;
     
     document.getElementById('challengeCurrentQ').textContent = room.current_question_index + 1;
     
-    // Update participants status bar
+    // Update participants status bar (vertical layout)
     const statusBar = document.getElementById('challengeParticipantsStatus');
     const answeredUsernames = answers.map(a => a.username);
     
@@ -2963,21 +3426,29 @@ function updateChallengeGame(data) {
         
         if (answer) {
             statusClass = answer.is_correct ? 'correct' : 'wrong';
-            statusIcon = answer.is_correct ? '✓' : '✗';
+            statusIcon = answer.is_correct ? '✅' : '❌';
         } else if (answeredUsernames.includes(p.username)) {
             statusClass = 'answered';
-            statusIcon = '✓';
+            statusIcon = '✅';
         }
         
         return `
-            <div class="participant-status-item ${statusClass}">
+            <div class="participant-item-vertical ${statusClass}">
                 <div class="avatar">${p.username.charAt(0).toUpperCase()}</div>
-                <div class="name">${p.username}</div>
+                <div class="info">
+                    <div class="name">${p.username}</div>
+                    <div class="score">${p.score || 0} puan • ${p.total_correct}/${p.total_correct + p.total_wrong}</div>
+                </div>
                 <div class="status-icon">${statusIcon}</div>
-                <div class="score">${p.total_correct}/${p.total_correct + p.total_wrong}</div>
             </div>
         `;
     }).join('');
+    
+    // Check if current user already answered this question
+    const myAnswer = answers.find(a => a.username === challengeState.username);
+    if (myAnswer) {
+        challengeState.hasAnswered = true;
+    }
     
     // Show question if available and not already answered
     if (currentQuestion && !challengeState.hasAnswered) {
@@ -3010,17 +3481,18 @@ function renderChallengeQuestion(question) {
     challengeState.hasAnswered = false;
     challengeState.selectedAnswer = null;
     
-    document.getElementById('challengeQuestionText').innerHTML = question.question_text;
+    // Make words clickable for unknown word marking (like in quiz)
+    document.getElementById('challengeQuestionText').innerHTML = makeWordsClickable(question.question_text);
     
     const optionsContainer = document.getElementById('challengeOptionsContainer');
     optionsContainer.innerHTML = question.options.map(opt => `
         <div class="option" data-letter="${opt.letter}">
             <button class="option-select-btn">${opt.letter}</button>
-            <span class="text">${opt.text}</span>
+            <span class="text">${makeWordsClickable(opt.text)}</span>
         </div>
     `).join('');
     
-    // Add click listeners
+    // Add click listeners for options
     optionsContainer.querySelectorAll('.option').forEach(opt => {
         const btn = opt.querySelector('.option-select-btn');
         btn.addEventListener('click', (e) => {
@@ -3028,6 +3500,9 @@ function renderChallengeQuestion(question) {
             selectChallengeAnswer(opt.dataset.letter);
         });
     });
+    
+    // Add word click listeners for unknown word marking
+    addWordClickListeners();
     
     // Hide feedback areas
     document.getElementById('challengeFeedback').classList.add('hidden');

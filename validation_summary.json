@@ -1,0 +1,38 @@
+{
+  "completed_at": "2026-02-01T01:33:30.517193",
+  "total_processed": 206,
+  "total_success": 206,
+  "total_errors": 0,
+  "total_regenerated": 0,
+  "total_corrected": 69,
+  "elapsed_seconds": 414.624777,
+  "categories": [
+    {
+      "category": "Nouns",
+      "processed": 1,
+      "success": 1,
+      "errors": 0,
+      "regenerated": 0,
+      "corrected": 1,
+      "elapsed_seconds": 9.368203
+    },
+    {
+      "category": "Modals",
+      "processed": 85,
+      "success": 85,
+      "errors": 0,
+      "regenerated": 0,
+      "corrected": 29,
+      "elapsed_seconds": 160.249327
+    },
+    {
+      "category": "Reductions",
+      "processed": 120,
+      "success": 120,
+      "errors": 0,
+      "regenerated": 0,
+      "corrected": 39,
+      "elapsed_seconds": 231.897392
+    }
+  ]
+}

@@ -36,9 +36,16 @@ module.exports = async (req, res) => {
         
         const result = await pool.query(query, params);
         
+        // Ensure options is always an array
+        const questions = result.rows.map(q => ({
+            ...q,
+            options: Array.isArray(q.options) ? q.options : 
+                    (typeof q.options === 'string' ? JSON.parse(q.options) : [])
+        }));
+        
         res.status(200).json({
             success: true,
-            questions: result.rows
+            questions: questions
         });
         
     } catch (error) {
