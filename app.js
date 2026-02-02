@@ -1,7 +1,7 @@
 // Quiz App - Main JavaScript
 
 // API Configuration
-const API_URL = window.location.hostname === 'localhost' 
+const API_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
     ? 'http://localhost:3001/api' 
     : '/api';
 
@@ -2688,18 +2688,45 @@ async function askGPTExplanation(wrongAnswerIndex) {
         if (dbExplanation) {
             // Also save to local cache
             saveGPTExplanationLocal(questionHash, dbExplanation);
-            updateGPTModalContent(dbExplanation, true);
+            updateGPTModalContent(dbExplanation, true, false, wrongAnswerIndex);
             return;
         }
         
         // Check local cache
         const localExplanations = getGPTExplanationsLocal();
         if (localExplanations[questionHash]) {
-            updateGPTModalContent(localExplanations[questionHash].explanation, true);
+            updateGPTModalContent(localExplanations[questionHash].explanation, true, false, wrongAnswerIndex);
             return;
         }
         
-        // Fetch from GPT
+        // No cached explanation found - show message with GPT button
+        updateGPTModalContent('Bu soru için kayıtlı açıklama bulunamadı.', false, false, wrongAnswerIndex, true);
+    } catch (error) {
+        console.error('GPT Panel Error:', error);
+        updateGPTModalContent('Açıklama yüklenirken bir hata oluştu.', false, false, wrongAnswerIndex, true);
+    }
+}
+
+async function fetchGPTExplanationForQuestion(wrongAnswerIndex) {
+    const wrongAnswers = getWrongAnswers();
+    const wrongAnswer = wrongAnswers[wrongAnswerIndex];
+    
+    if (!wrongAnswer) return;
+    
+    const question = wrongAnswer.question;
+    const userAnswer = wrongAnswer.userAnswer;
+    const questionHash = hashQuestion(question.question_text);
+    
+    // Show loading state
+    const contentEl = document.getElementById('gptExplanationContent');
+    contentEl.innerHTML = `
+        <div class="gpt-loading">
+            <div class="loading-spinner"></div>
+            <p>GPT açıklama hazırlıyor...</p>
+        </div>
+    `;
+    
+    try {
         const explanation = await fetchGPTExplanation(question, userAnswer);
         
         // Save to database (shared cache)
@@ -2712,7 +2739,7 @@ async function askGPTExplanation(wrongAnswerIndex) {
         updateGPTModalContent(explanation, false);
     } catch (error) {
         console.error('GPT API Error:', error);
-        updateGPTModalContent('Açıklama yüklenirken bir hata oluştu. Lütfen tekrar deneyin.', false, true);
+        updateGPTModalContent('GPT şu an kullanılamıyor. Lütfen daha sonra tekrar deneyin.', false, true);
     }
 }
 
@@ -2768,16 +2795,43 @@ function showGPTExplanationModal(question, userAnswer, explanation, fromCache) {
     modal.classList.add('active');
 }
 
-function updateGPTModalContent(content, fromCache, isError = false) {
+function updateGPTModalContent(content, fromCache, isError = false, wrongAnswerIndex = null, showGPTButton = false) {
     const contentEl = document.getElementById('gptExplanationContent');
     const cacheIndicator = document.getElementById('gptCacheIndicator');
     
+    let html = '';
+    
     if (isError) {
-        contentEl.innerHTML = `<div class="gpt-error">${content}</div>`;
+        html = `<div class="gpt-error">${content}</div>`;
     } else {
-        contentEl.innerHTML = formatGPTExplanation(content);
+        html = formatGPTExplanation(content);
     }
     
+    // Add "Anlamadım, GPT ile açıkla" button if cached explanation shown or no explanation found
+    if ((fromCache || showGPTButton) && wrongAnswerIndex !== null) {
+        html += `
+            <div class="gpt-button-container" style="margin-top: 20px; text-align: center;">
+                <button onclick="fetchGPTExplanationForQuestion(${wrongAnswerIndex})" class="gpt-explain-btn" style="
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    border: none;
+                    padding: 12px 24px;
+                    border-radius: 8px;
+                    font-size: 14px;
+                    cursor: pointer;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 8px;
+                    transition: transform 0.2s, box-shadow 0.2s;
+                ">
+                    <span>🤖</span>
+                    <span>${showGPTButton ? 'GPT ile Açıkla' : 'Anlamadım, GPT ile Detaylı Açıkla'}</span>
+                </button>
+            </div>
+        `;
+    }
+    
+    contentEl.innerHTML = html;
     cacheIndicator.style.display = fromCache ? 'block' : 'none';
 }
 
