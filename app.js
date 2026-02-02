@@ -1,11 +1,6 @@
 // Quiz App - Main JavaScript
 // Uses modular utilities from src/utils/
 
-// API Configuration - use central module
-const API_URL = window.API?.URL || ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-    ? 'http://localhost:3001/api' 
-    : '/api');
-
 // Current User State
 let currentUser = null;
 
@@ -71,7 +66,7 @@ async function handleLogin() {
     }
     
     try {
-        const response = await fetch(`${API_URL}/auth/login`, {
+        const response = await fetch(`${window.API.URL}/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password })
@@ -113,7 +108,7 @@ async function handleRegister() {
     }
     
     try {
-        const response = await fetch(`${API_URL}/auth/register`, {
+        const response = await fetch(`${window.API.URL}/auth/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, email, password })
@@ -236,7 +231,7 @@ async function loadUserDataFromAPI() {
     }
     
     try {
-        const response = await fetch(`${API_URL}/user/${currentUser.id}/all-data`);
+        const response = await fetch(`${window.API.URL}/user/${currentUser.id}/all-data`);
         const data = await response.json();
         
         if (data.success) {
@@ -268,13 +263,13 @@ async function syncUnknownWord(word, isAdding) {
     
     try {
         if (isAdding) {
-            await fetch(`${API_URL}/user/${currentUser.id}/unknown-words`, {
+            await fetch(`${window.API.URL}/user/${currentUser.id}/unknown-words`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ word })
             });
         } else {
-            await fetch(`${API_URL}/user/${currentUser.id}/unknown-words/${encodeURIComponent(word)}`, {
+            await fetch(`${window.API.URL}/user/${currentUser.id}/unknown-words/${encodeURIComponent(word)}`, {
                 method: 'DELETE'
             });
         }
@@ -289,7 +284,7 @@ async function syncAnswerHistory(question, userAnswer, isCorrect) {
     
     try {
         const questionHash = getQuestionKey(question);
-        await fetch(`${API_URL}/user/${currentUser.id}/answer-history`, {
+        await fetch(`${window.API.URL}/user/${currentUser.id}/answer-history`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -311,13 +306,13 @@ async function syncFavorite(question, isAdding) {
     
     try {
         if (isAdding) {
-            await fetch(`${API_URL}/user/${currentUser.id}/favorites`, {
+            await fetch(`${window.API.URL}/user/${currentUser.id}/favorites`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ question })
             });
         } else {
-            await fetch(`${API_URL}/user/${currentUser.id}/favorites`, {
+            await fetch(`${window.API.URL}/user/${currentUser.id}/favorites`, {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ questionText: question.question_text })
@@ -333,7 +328,7 @@ async function syncWrongAnswer(question, userAnswer) {
     if (!isLoggedIn()) return;
     
     try {
-        await fetch(`${API_URL}/user/${currentUser.id}/wrong-answers`, {
+        await fetch(`${window.API.URL}/user/${currentUser.id}/wrong-answers`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -357,7 +352,7 @@ async function syncDailyStats() {
         const dailyStats = getDailyStats();
         const todayStats = dailyStats[today] || { answered: 0, correct: 0 };
         
-        await fetch(`${API_URL}/user/${currentUser.id}/daily-stats`, {
+        await fetch(`${window.API.URL}/user/${currentUser.id}/daily-stats`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -450,7 +445,7 @@ async function loadCategories() {
 
     try {
         // Fetch categories summary
-        const categoriesResponse = await fetch(`${API_URL}/categories`);
+        const categoriesResponse = await fetch(`${window.API.URL}/categories`);
         const categoriesData = await categoriesResponse.json();
         
         if (!categoriesData.success) {
@@ -458,7 +453,7 @@ async function loadCategories() {
         }
         
         // Fetch all questions
-        const questionsResponse = await fetch(`${API_URL}/questions`);
+        const questionsResponse = await fetch(`${window.API.URL}/questions`);
         const questionsData = await questionsResponse.json();
         
         if (!questionsData.success) {
@@ -1041,7 +1036,7 @@ async function clearWrongAnswers() {
         // Clear from API for logged-in users
         if (isLoggedIn()) {
             try {
-                await fetch(`${API_URL}/user/${currentUser.id}/wrong-answers`, { method: 'DELETE' });
+                await fetch(`${window.API.URL}/user/${currentUser.id}/wrong-answers`, { method: 'DELETE' });
             } catch (error) {
                 console.error('Clear wrong answers API error:', error);
             }
@@ -1161,7 +1156,7 @@ async function clearAnswerHistory() {
         // Clear from API for logged-in users
         if (isLoggedIn()) {
             try {
-                await fetch(`${API_URL}/user/${currentUser.id}/answer-history`, { method: 'DELETE' });
+                await fetch(`${window.API.URL}/user/${currentUser.id}/answer-history`, { method: 'DELETE' });
             } catch (error) {
                 console.error('Clear answer history API error:', error);
             }
@@ -1213,7 +1208,7 @@ async function clearUnknownWords() {
         // Clear from API for logged-in users
         if (isLoggedIn()) {
             try {
-                await fetch(`${API_URL}/user/${currentUser.id}/unknown-words`, { method: 'DELETE' });
+                await fetch(`${window.API.URL}/user/${currentUser.id}/unknown-words`, { method: 'DELETE' });
             } catch (error) {
                 console.error('Clear unknown words API error:', error);
             }
@@ -1538,7 +1533,7 @@ async function clearFavorites() {
         // Clear from API for logged-in users
         if (isLoggedIn()) {
             try {
-                await fetch(`${API_URL}/user/${currentUser.id}/favorites/all`, { method: 'DELETE' });
+                await fetch(`${window.API.URL}/user/${currentUser.id}/favorites/all`, { method: 'DELETE' });
             } catch (error) {
                 console.error('Clear favorites API error:', error);
             }
@@ -2601,7 +2596,7 @@ function saveGPTExplanationLocal(questionHash, explanation) {
 // Database functions for shared cache
 async function getGPTExplanationFromDB(questionHash) {
     try {
-        const response = await fetch(`${API_URL}/gpt-explanation/${questionHash}`);
+        const response = await fetch(`${window.API.URL}/gpt-explanation/${questionHash}`);
         if (response.ok) {
             const data = await response.json();
             return data.explanation;
@@ -2615,7 +2610,7 @@ async function getGPTExplanationFromDB(questionHash) {
 
 async function saveGPTExplanationToDB(questionHash, questionText, explanation) {
     try {
-        await fetch(`${API_URL}/gpt-explanation`, {
+        await fetch(`${window.API.URL}/gpt-explanation`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ questionHash, questionText, explanation })
@@ -2714,7 +2709,7 @@ async function fetchGPTExplanationForQuestion(wrongAnswerIndex) {
 }
 
 async function fetchGPTExplanation(question, userAnswer) {
-    const response = await fetch(`${API_URL}/gpt-explain`, {
+    const response = await fetch(`${window.API.URL}/gpt-explain`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
