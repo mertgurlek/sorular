@@ -187,25 +187,13 @@ let currentQuiz = {
     timerInterval: null
 };
 
-// Storage Keys - use central module or fallback
-const STORAGE_KEYS = window.Storage?.KEYS || {
-    WRONG_ANSWERS: 'yds_wrong_answers',
-    UNKNOWN_WORDS: 'yds_unknown_words',
-    STATS: 'yds_stats',
-    THEME: 'yds_theme',
-    DAILY_STATS: 'yds_daily_stats',
-    DAILY_GOAL: 'yds_daily_goal',
-    STREAK: 'yds_streak',
-    FAVORITES: 'yds_favorites',
-    GPT_EXPLANATIONS: 'yds_gpt_explanations',
-    ANSWER_HISTORY: 'yds_answer_history'
-};
-
 // OpenAI API Configuration
 const OPENAI_CONFIG = {
     apiKey: '', // API key should be set via environment variable or server-side
     model: 'gpt-4o-mini'
 };
+
+// Use STORAGE_KEYS from window.Storage (loaded from src/utils/storage.js)
 
 // ==================== USER DATA SYNC ====================
 // Cache for user data (loaded from API for logged-in users)
@@ -243,10 +231,10 @@ async function loadUserDataFromAPI() {
             userDataCache.loaded = true;
             
             // Also update localStorage as backup
-            localStorage.setItem(STORAGE_KEYS.UNKNOWN_WORDS, JSON.stringify(userDataCache.unknownWords));
-            localStorage.setItem(STORAGE_KEYS.ANSWER_HISTORY, JSON.stringify(userDataCache.answerHistory));
-            localStorage.setItem(STORAGE_KEYS.FAVORITES, JSON.stringify(userDataCache.favorites));
-            localStorage.setItem(STORAGE_KEYS.DAILY_STATS, JSON.stringify(userDataCache.dailyStats));
+            localStorage.setItem(window.Storage.KEYS.UNKNOWN_WORDS, JSON.stringify(userDataCache.unknownWords));
+            localStorage.setItem(window.Storage.KEYS.ANSWER_HISTORY, JSON.stringify(userDataCache.answerHistory));
+            localStorage.setItem(window.Storage.KEYS.FAVORITES, JSON.stringify(userDataCache.favorites));
+            localStorage.setItem(window.Storage.KEYS.DAILY_STATS, JSON.stringify(userDataCache.dailyStats));
             
             console.log('✅ User data loaded from server');
         }
@@ -366,46 +354,7 @@ async function syncDailyStats() {
     }
 }
 
-// Category names - use central module or fallback
-const CATEGORY_NAMES = window.Constants?.CATEGORY_NAMES || [
-    'Adjectives & Adverbs',
-    'Conjunctions',
-    'Gerunds & Infinitives',
-    'Grammar Revision',
-    'If Clauses',
-    'Modals',
-    'Noun Clauses',
-    'Nouns',
-    'Passive',
-    'Reductions',
-    'Relative Clauses',
-    'Tenses'
-];
-
-// YDS Exam Distribution - use central module or fallback
-const YDS_DISTRIBUTION = window.Constants?.YDS_DISTRIBUTION || {
-    'mini': { 'YDS Kelime Soruları': 3, 'YDS Gramer': 3, 'YDS Cümle Tamamlama': 2, 'YDS Çeviri Soruları': 3, 'YDS Diyalog': 1, 'YDS Paragraf Doldurma': 1, 'YDS İlgisiz Cümleyi Bulma': 1, 'YDS Reading Passages': 4, 'YDS Eş Anlam': 2 },
-    'medium': { 'YDS Kelime Soruları': 5, 'YDS Gramer': 5, 'YDS Cümle Tamamlama': 5, 'YDS Çeviri Soruları': 6, 'YDS Diyalog': 3, 'YDS Paragraf Doldurma': 3, 'YDS İlgisiz Cümleyi Bulma': 3, 'YDS Reading Passages': 8, 'YDS Eş Anlam': 2 },
-    'full': { 'YDS Kelime Soruları': 10, 'YDS Gramer': 10, 'YDS Cümle Tamamlama': 10, 'YDS Çeviri Soruları': 12, 'YDS Diyalog': 5, 'YDS Paragraf Doldurma': 5, 'YDS İlgisiz Cümleyi Bulma': 5, 'YDS Reading Passages': 18, 'YDS Eş Anlam': 5 }
-};
-
-// Category mappings - use central module or fallback
-const CATEGORY_MAPPING = window.Constants?.CATEGORY_MAPPING || {
-    'YDS Kelime Soruları': ['YDS Kelime Soruları'],
-    'YDS Gramer': ['YDS Gramer', 'Grammar Revision'],
-    'YDS Cümle Tamamlama': ['YDS Cümle Tamamlama'],
-    'YDS Çeviri Soruları': ['YDS Çeviri Soruları'],
-    'YDS Diyalog': ['YDS Diyalog'],
-    'YDS Paragraf Doldurma': ['YDS Paragraf Doldurma'],
-    'YDS İlgisiz Cümleyi Bulma': ['YDS İlgisiz Cümleyi Bulma'],
-    'YDS Reading Passages': ['YDS Reading Passages', 'YDS Okuma Soruları'],
-    'YDS Eş Anlam': ['YDS Eş Anlam', 'YDS Durum']
-};
-
-// Exam time limits - use central module or fallback
-const EXAM_TIME_LIMITS = window.Constants?.EXAM_TIME_LIMITS || {
-    'mini': 35 * 60, 'medium': 75 * 60, 'full': 150 * 60
-};
+// Constants loaded from window.Constants (src/utils/constants.js)
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
@@ -426,7 +375,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Theme
 function initTheme() {
-    const savedTheme = localStorage.getItem(STORAGE_KEYS.THEME);
+    const savedTheme = localStorage.getItem(window.Storage.KEYS.THEME);
     if (savedTheme === 'light') {
         document.body.classList.remove('dark-mode');
     }
@@ -435,7 +384,7 @@ function initTheme() {
 function toggleTheme() {
     document.body.classList.toggle('dark-mode');
     const isDark = document.body.classList.contains('dark-mode');
-    localStorage.setItem(STORAGE_KEYS.THEME, isDark ? 'dark' : 'light');
+    localStorage.setItem(window.Storage.KEYS.THEME, isDark ? 'dark' : 'light');
 }
 
 // Load Categories from PostgreSQL API
@@ -998,7 +947,7 @@ function exitQuiz() {
 
 // Wrong Answers
 function getWrongAnswers() {
-    return JSON.parse(localStorage.getItem(STORAGE_KEYS.WRONG_ANSWERS) || '[]');
+    return JSON.parse(localStorage.getItem(window.Storage.KEYS.WRONG_ANSWERS) || '[]');
 }
 
 function saveWrongAnswer(question, userAnswer) {
@@ -1015,7 +964,7 @@ function saveWrongAnswer(question, userAnswer) {
             userAnswer,
             timestamp: new Date().toISOString()
         });
-        localStorage.setItem(STORAGE_KEYS.WRONG_ANSWERS, JSON.stringify(wrongAnswers));
+        localStorage.setItem(window.Storage.KEYS.WRONG_ANSWERS, JSON.stringify(wrongAnswers));
         
         // Sync to API for logged-in users
         syncWrongAnswer(question, userAnswer);
@@ -1025,13 +974,13 @@ function saveWrongAnswer(question, userAnswer) {
 function removeWrongAnswer(index) {
     const wrongAnswers = getWrongAnswers();
     wrongAnswers.splice(index, 1);
-    localStorage.setItem(STORAGE_KEYS.WRONG_ANSWERS, JSON.stringify(wrongAnswers));
+    localStorage.setItem(window.Storage.KEYS.WRONG_ANSWERS, JSON.stringify(wrongAnswers));
     renderWrongAnswers();
 }
 
 async function clearWrongAnswers() {
     if (confirm('Tüm yanlış cevapları silmek istediğinize emin misiniz?')) {
-        localStorage.setItem(STORAGE_KEYS.WRONG_ANSWERS, '[]');
+        localStorage.setItem(window.Storage.KEYS.WRONG_ANSWERS, '[]');
         
         // Clear from API for logged-in users
         if (isLoggedIn()) {
@@ -1080,7 +1029,7 @@ function renderWrongAnswers() {
 
 // ==================== ANSWER HISTORY ====================
 function getAnswerHistory() {
-    return JSON.parse(localStorage.getItem(STORAGE_KEYS.ANSWER_HISTORY) || '{}');
+    return JSON.parse(localStorage.getItem(window.Storage.KEYS.ANSWER_HISTORY) || '{}');
 }
 
 function getQuestionKey(question) {
@@ -1113,7 +1062,7 @@ function saveAnswerHistory(question, userAnswer, isCorrect) {
     history[key].correctCount = history[key].attempts.filter(a => a.isCorrect).length;
     history[key].wrongCount = history[key].attempts.filter(a => !a.isCorrect).length;
     
-    localStorage.setItem(STORAGE_KEYS.ANSWER_HISTORY, JSON.stringify(history));
+    localStorage.setItem(window.Storage.KEYS.ANSWER_HISTORY, JSON.stringify(history));
     
     // Sync to API for logged-in users
     syncAnswerHistory(question, userAnswer, isCorrect);
@@ -1151,7 +1100,7 @@ function filterQuestionsByHistory(questions, filterType) {
 
 async function clearAnswerHistory() {
     if (confirm('Tüm cevap geçmişini silmek istediğinize emin misiniz?')) {
-        localStorage.setItem(STORAGE_KEYS.ANSWER_HISTORY, '{}');
+        localStorage.setItem(window.Storage.KEYS.ANSWER_HISTORY, '{}');
         
         // Clear from API for logged-in users
         if (isLoggedIn()) {
@@ -1168,7 +1117,7 @@ async function clearAnswerHistory() {
 
 // Unknown Words
 function getUnknownWords() {
-    return JSON.parse(localStorage.getItem(STORAGE_KEYS.UNKNOWN_WORDS) || '[]');
+    return JSON.parse(localStorage.getItem(window.Storage.KEYS.UNKNOWN_WORDS) || '[]');
 }
 
 function toggleUnknownWord(word) {
@@ -1182,7 +1131,7 @@ function toggleUnknownWord(word) {
         words.splice(index, 1);
     }
     
-    localStorage.setItem(STORAGE_KEYS.UNKNOWN_WORDS, JSON.stringify(words));
+    localStorage.setItem(window.Storage.KEYS.UNKNOWN_WORDS, JSON.stringify(words));
     
     // Sync to API for logged-in users
     syncUnknownWord(word.toLowerCase(), isAdding);
@@ -1193,7 +1142,7 @@ function removeUnknownWord(word) {
     const index = words.indexOf(word);
     if (index !== -1) {
         words.splice(index, 1);
-        localStorage.setItem(STORAGE_KEYS.UNKNOWN_WORDS, JSON.stringify(words));
+        localStorage.setItem(window.Storage.KEYS.UNKNOWN_WORDS, JSON.stringify(words));
         
         // Sync to API for logged-in users
         syncUnknownWord(word, false);
@@ -1203,7 +1152,7 @@ function removeUnknownWord(word) {
 
 async function clearUnknownWords() {
     if (confirm('Tüm bilmediğiniz kelimeleri silmek istediğinize emin misiniz?')) {
-        localStorage.setItem(STORAGE_KEYS.UNKNOWN_WORDS, '[]');
+        localStorage.setItem(window.Storage.KEYS.UNKNOWN_WORDS, '[]');
         
         // Clear from API for logged-in users
         if (isLoggedIn()) {
@@ -1243,7 +1192,7 @@ function renderUnknownWords() {
 
 // Stats
 function getStats() {
-    return JSON.parse(localStorage.getItem(STORAGE_KEYS.STATS) || '{}');
+    return JSON.parse(localStorage.getItem(window.Storage.KEYS.STATS) || '{}');
 }
 
 function updateStatsData(category, isCorrect) {
@@ -1259,7 +1208,7 @@ function updateStatsData(category, isCorrect) {
         stats[category].wrong++;
     }
     
-    localStorage.setItem(STORAGE_KEYS.STATS, JSON.stringify(stats));
+    localStorage.setItem(window.Storage.KEYS.STATS, JSON.stringify(stats));
 }
 
 function updateStats() {
@@ -1287,7 +1236,7 @@ function updateStats() {
 
     // Category stats
     const categoryStatsContainer = document.getElementById('categoryStats');
-    const categories = CATEGORY_NAMES;
+    const categories = window.Constants.CATEGORY_NAMES;
     
     categoryStatsContainer.innerHTML = categories.map(cat => {
         const catStats = stats[cat] || { correct: 0, wrong: 0 };
@@ -1308,9 +1257,9 @@ function updateStats() {
 
 function resetStats() {
     if (confirm('Tüm istatistikleri sıfırlamak istediğinize emin misiniz?')) {
-        localStorage.setItem(STORAGE_KEYS.STATS, '{}');
-        localStorage.setItem(STORAGE_KEYS.DAILY_STATS, '{}');
-        localStorage.setItem(STORAGE_KEYS.STREAK, JSON.stringify({ days: 0, lastDate: null }));
+        localStorage.setItem(window.Storage.KEYS.STATS, '{}');
+        localStorage.setItem(window.Storage.KEYS.DAILY_STATS, '{}');
+        localStorage.setItem(window.Storage.KEYS.STREAK, JSON.stringify({ days: 0, lastDate: null }));
         updateStats();
     }
 }
@@ -1321,20 +1270,20 @@ function getTodayKey() {
 }
 
 function getDailyStats() {
-    return JSON.parse(localStorage.getItem(STORAGE_KEYS.DAILY_STATS) || '{}');
+    return JSON.parse(localStorage.getItem(window.Storage.KEYS.DAILY_STATS) || '{}');
 }
 
 function getDailyGoal() {
-    return parseInt(localStorage.getItem(STORAGE_KEYS.DAILY_GOAL) || '20');
+    return parseInt(localStorage.getItem(window.Storage.KEYS.DAILY_GOAL) || '20');
 }
 
 function setDailyGoal(goal) {
-    localStorage.setItem(STORAGE_KEYS.DAILY_GOAL, goal.toString());
+    localStorage.setItem(window.Storage.KEYS.DAILY_GOAL, goal.toString());
     updateGoalDisplay();
 }
 
 function getStreak() {
-    return JSON.parse(localStorage.getItem(STORAGE_KEYS.STREAK) || '{"days": 0, "lastDate": null}');
+    return JSON.parse(localStorage.getItem(window.Storage.KEYS.STREAK) || '{"days": 0, "lastDate": null}');
 }
 
 function updateDailyStats() {
@@ -1346,7 +1295,7 @@ function updateDailyStats() {
     }
     dailyStats[today].answered++;
     
-    localStorage.setItem(STORAGE_KEYS.DAILY_STATS, JSON.stringify(dailyStats));
+    localStorage.setItem(window.Storage.KEYS.DAILY_STATS, JSON.stringify(dailyStats));
     
     // Update streak
     updateStreak();
@@ -1365,7 +1314,7 @@ function updateDailyCorrect() {
     }
     dailyStats[today].correct++;
     
-    localStorage.setItem(STORAGE_KEYS.DAILY_STATS, JSON.stringify(dailyStats));
+    localStorage.setItem(window.Storage.KEYS.DAILY_STATS, JSON.stringify(dailyStats));
     
     // Sync to API for logged-in users
     syncDailyStats();
@@ -1397,7 +1346,7 @@ function updateStreak() {
             streak.days = 1;
             streak.lastDate = today;
         }
-        localStorage.setItem(STORAGE_KEYS.STREAK, JSON.stringify(streak));
+        localStorage.setItem(window.Storage.KEYS.STREAK, JSON.stringify(streak));
     }
 }
 
@@ -1471,7 +1420,7 @@ function initGoalEventListeners() {
 
 // ==================== FAVORITES ====================
 function getFavorites() {
-    return JSON.parse(localStorage.getItem(STORAGE_KEYS.FAVORITES) || '[]');
+    return JSON.parse(localStorage.getItem(window.Storage.KEYS.FAVORITES) || '[]');
 }
 
 function isFavorite(questionText) {
@@ -1491,7 +1440,7 @@ function toggleFavorite() {
         favorites.splice(index, 1);
     }
     
-    localStorage.setItem(STORAGE_KEYS.FAVORITES, JSON.stringify(favorites));
+    localStorage.setItem(window.Storage.KEYS.FAVORITES, JSON.stringify(favorites));
     updateFavoriteButton();
     
     // Sync to API for logged-in users
@@ -1516,7 +1465,7 @@ function removeFavorite(index) {
     const favorites = getFavorites();
     const removedQuestion = favorites[index];
     favorites.splice(index, 1);
-    localStorage.setItem(STORAGE_KEYS.FAVORITES, JSON.stringify(favorites));
+    localStorage.setItem(window.Storage.KEYS.FAVORITES, JSON.stringify(favorites));
     
     // Sync to API for logged-in users
     if (removedQuestion) {
@@ -1528,7 +1477,7 @@ function removeFavorite(index) {
 
 async function clearFavorites() {
     if (confirm('Tüm favorileri silmek istediğinize emin misiniz?')) {
-        localStorage.setItem(STORAGE_KEYS.FAVORITES, '[]');
+        localStorage.setItem(window.Storage.KEYS.FAVORITES, '[]');
         
         // Clear from API for logged-in users
         if (isLoggedIn()) {
@@ -1606,7 +1555,7 @@ function initFavoriteEventListeners() {
     
     // Populate filter dropdown
     const filterSelect = document.getElementById('favFilterCategory');
-    for (const name of CATEGORY_NAMES) {
+    for (const name of window.Constants.CATEGORY_NAMES) {
         const option = document.createElement('option');
         option.value = name;
         option.textContent = name;
@@ -1907,7 +1856,7 @@ function updateExamDistributionPreview(size) {
     const container = document.getElementById('examDistributionPreview');
     if (!container) return;
     
-    const distribution = YDS_DISTRIBUTION[size];
+    const distribution = window.Constants.YDS_DISTRIBUTION[size];
     if (!distribution) return;
     
     const total = Object.values(distribution).reduce((a, b) => a + b, 0);
@@ -1930,13 +1879,13 @@ function updateExamDistributionPreview(size) {
 
 // Gerçek YDS dağılımına göre soru seç
 function selectQuestionsWithYDSDistribution(allQuestions, examSize = 'full') {
-    const distribution = YDS_DISTRIBUTION[examSize];
+    const distribution = window.Constants.YDS_DISTRIBUTION[examSize];
     const selectedQuestions = [];
     
     // Her YDS kategorisi için soruları grupla
     const questionsByCategory = {};
     
-    for (const [ydsCategory, dbCategories] of Object.entries(CATEGORY_MAPPING)) {
+    for (const [ydsCategory, dbCategories] of Object.entries(window.Constants.CATEGORY_MAPPING)) {
         questionsByCategory[ydsCategory] = allQuestions.filter(q => 
             dbCategories.some(dbCat => q.category === dbCat || q.category?.includes(dbCat))
         );
@@ -1973,7 +1922,7 @@ function startExam() {
     examState.questions = selectQuestionsWithYDSDistribution(allQuestions, selectedSize);
     
     // Set time limit based on exam size
-    examState.totalTime = EXAM_TIME_LIMITS[selectedSize];
+    examState.totalTime = window.Constants.EXAM_TIME_LIMITS[selectedSize];
     examState.answers = new Array(examState.questions.length).fill(null);
     examState.currentIndex = 0;
     examState.timeRemaining = examState.totalTime;
@@ -2581,7 +2530,7 @@ async function askGPTForCurrentQuestion() {
 
 // Local storage functions
 function getGPTExplanationsLocal() {
-    return JSON.parse(localStorage.getItem(STORAGE_KEYS.GPT_EXPLANATIONS) || '{}');
+    return JSON.parse(localStorage.getItem(window.Storage.KEYS.GPT_EXPLANATIONS) || '{}');
 }
 
 function saveGPTExplanationLocal(questionHash, explanation) {
@@ -2590,7 +2539,7 @@ function saveGPTExplanationLocal(questionHash, explanation) {
         explanation,
         timestamp: new Date().toISOString()
     };
-    localStorage.setItem(STORAGE_KEYS.GPT_EXPLANATIONS, JSON.stringify(explanations));
+    localStorage.setItem(window.Storage.KEYS.GPT_EXPLANATIONS, JSON.stringify(explanations));
 }
 
 // Database functions for shared cache
