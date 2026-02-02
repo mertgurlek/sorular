@@ -1,9 +1,10 @@
 // Quiz App - Main JavaScript
+// Uses modular utilities from src/utils/
 
-// API Configuration
-const API_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+// API Configuration - use central module
+const API_URL = window.API?.URL || ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
     ? 'http://localhost:3001/api' 
-    : '/api';
+    : '/api');
 
 // Current User State
 let currentUser = null;
@@ -191,8 +192,8 @@ let currentQuiz = {
     timerInterval: null
 };
 
-// Storage Keys
-const STORAGE_KEYS = {
+// Storage Keys - use central module or fallback
+const STORAGE_KEYS = window.Storage?.KEYS || {
     WRONG_ANSWERS: 'yds_wrong_answers',
     UNKNOWN_WORDS: 'yds_unknown_words',
     STATS: 'yds_stats',
@@ -370,8 +371,8 @@ async function syncDailyStats() {
     }
 }
 
-// Category names for display
-const CATEGORY_NAMES = [
+// Category names - use central module or fallback
+const CATEGORY_NAMES = window.Constants?.CATEGORY_NAMES || [
     'Adjectives & Adverbs',
     'Conjunctions',
     'Gerunds & Infinitives',
@@ -386,45 +387,15 @@ const CATEGORY_NAMES = [
     'Tenses'
 ];
 
-// YDS Sınav Dağılımı - Gerçek YDS formatına göre
-const YDS_DISTRIBUTION = {
-    'mini': {  // 20 soru
-        'YDS Kelime Soruları': 3,
-        'YDS Gramer': 3,
-        'YDS Cümle Tamamlama': 2,
-        'YDS Çeviri Soruları': 3,
-        'YDS Diyalog': 1,
-        'YDS Paragraf Doldurma': 1,
-        'YDS İlgisiz Cümleyi Bulma': 1,
-        'YDS Reading Passages': 4,
-        'YDS Eş Anlam': 2
-    },
-    'medium': {  // 40 soru
-        'YDS Kelime Soruları': 5,
-        'YDS Gramer': 5,
-        'YDS Cümle Tamamlama': 5,
-        'YDS Çeviri Soruları': 6,
-        'YDS Diyalog': 3,
-        'YDS Paragraf Doldurma': 3,
-        'YDS İlgisiz Cümleyi Bulma': 3,
-        'YDS Reading Passages': 8,
-        'YDS Eş Anlam': 2
-    },
-    'full': {  // 80 soru - Gerçek YDS
-        'YDS Kelime Soruları': 10,
-        'YDS Gramer': 10,
-        'YDS Cümle Tamamlama': 10,
-        'YDS Çeviri Soruları': 12,
-        'YDS Diyalog': 5,
-        'YDS Paragraf Doldurma': 5,
-        'YDS İlgisiz Cümleyi Bulma': 5,
-        'YDS Reading Passages': 18,
-        'YDS Eş Anlam': 5
-    }
+// YDS Exam Distribution - use central module or fallback
+const YDS_DISTRIBUTION = window.Constants?.YDS_DISTRIBUTION || {
+    'mini': { 'YDS Kelime Soruları': 3, 'YDS Gramer': 3, 'YDS Cümle Tamamlama': 2, 'YDS Çeviri Soruları': 3, 'YDS Diyalog': 1, 'YDS Paragraf Doldurma': 1, 'YDS İlgisiz Cümleyi Bulma': 1, 'YDS Reading Passages': 4, 'YDS Eş Anlam': 2 },
+    'medium': { 'YDS Kelime Soruları': 5, 'YDS Gramer': 5, 'YDS Cümle Tamamlama': 5, 'YDS Çeviri Soruları': 6, 'YDS Diyalog': 3, 'YDS Paragraf Doldurma': 3, 'YDS İlgisiz Cümleyi Bulma': 3, 'YDS Reading Passages': 8, 'YDS Eş Anlam': 2 },
+    'full': { 'YDS Kelime Soruları': 10, 'YDS Gramer': 10, 'YDS Cümle Tamamlama': 10, 'YDS Çeviri Soruları': 12, 'YDS Diyalog': 5, 'YDS Paragraf Doldurma': 5, 'YDS İlgisiz Cümleyi Bulma': 5, 'YDS Reading Passages': 18, 'YDS Eş Anlam': 5 }
 };
 
-// Kategori eşleştirmeleri (DB kategorileri -> YDS kategorileri)
-const CATEGORY_MAPPING = {
+// Category mappings - use central module or fallback
+const CATEGORY_MAPPING = window.Constants?.CATEGORY_MAPPING || {
     'YDS Kelime Soruları': ['YDS Kelime Soruları'],
     'YDS Gramer': ['YDS Gramer', 'Grammar Revision'],
     'YDS Cümle Tamamlama': ['YDS Cümle Tamamlama'],
@@ -436,11 +407,9 @@ const CATEGORY_MAPPING = {
     'YDS Eş Anlam': ['YDS Eş Anlam', 'YDS Durum']
 };
 
-// Exam time limits (in seconds)
-const EXAM_TIME_LIMITS = {
-    'mini': 35 * 60,    // 35 minutes
-    'medium': 75 * 60,  // 75 minutes
-    'full': 150 * 60    // 150 minutes
+// Exam time limits - use central module or fallback
+const EXAM_TIME_LIMITS = window.Constants?.EXAM_TIME_LIMITS || {
+    'mini': 35 * 60, 'medium': 75 * 60, 'full': 150 * 60
 };
 
 // Initialize

@@ -1,58 +1,37 @@
-const { Pool } = require('pg');
+const { query } = require('./lib/db');
+const { asyncHandler, sendSuccess } = require('./lib/middleware');
 
-const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: {
-        rejectUnauthorized: false
+function parseOptions(options) {
+    if (Array.isArray(options)) return options;
+    if (typeof options === 'string') {
+        try { return JSON.parse(options); } catch { return []; }
     }
-});
+    return [];
+}
 
-module.exports = async (req, res) => {
-    // CORS headers
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+module.exports = asyncHandler(async (req, res) => {
+    const { category } = req.query;
     
-    if (req.method === 'OPTIONS') {
-        return res.status(200).end();
+    let sql = `
+        SELECT id, question_number, question_text, options, correct_answer, 
+               category, url, test_url
+        FROM questions
+    `;
+    let params = [];
+    
+    if (category && category !== 'all') {
+        sql += ' WHERE category = $1';
+        params.push(category);
     }
-
-    try {
-        const { category } = req.query;
-        
-        let query = `
-            SELECT id, question_number, question_text, options, correct_answer, 
-                   category, url, test_url
-            FROM questions
-        `;
-        let params = [];
-        
-        if (category && category !== 'all') {
-            query += ' WHERE category = $1';
-            params.push(category);
-        }
-        
-        query += ' ORDER BY category, id';
-        
-        const result = await pool.query(query, params);
-        
-        // Ensure options is always an array
-        const questions = result.rows.map(q => ({
-            ...q,
-            options: Array.isArray(q.options) ? q.options : 
-                    (typeof q.options === 'string' ? JSON.parse(q.options) : [])
-        }));
-        
-        res.status(200).json({
-            success: true,
-            questions: questions
-        });
-        
-    } catch (error) {
-        console.error('Questions API error:', error);
-        res.status(500).json({ 
-            success: false, 
-            error: 'Veritabanı hatası' 
-        });
-    }
-};
+    
+    sql += ' ORDER BY category, id';
+    
+    const result = await query(sql, params);
+    
+    const questions = result.rows.map(q => ({
+        ...q,
+        options: parseOptions(q.options)
+    }));
+    
+    sendSuccess(res, { questions });
+});
