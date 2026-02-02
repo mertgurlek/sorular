@@ -943,7 +943,6 @@ function exitQuiz() {
 }
 
 // Wrong Answers - using window.Storage from src/utils/storage.js
-const getWrongAnswers = window.Storage.getWrongAnswers;
 
 function saveWrongAnswer(question, userAnswer) {
     // Use storage utility and sync to API
@@ -1011,8 +1010,6 @@ function renderWrongAnswers() {
 
 // ==================== ANSWER HISTORY ====================
 // Using window.Storage from src/utils/storage.js
-const getAnswerHistory = window.Storage.getAnswerHistory;
-const getQuestionKey = window.Storage.getQuestionKey;
 
 function saveAnswerHistory(question, userAnswer, isCorrect) {
     // Use storage utility for local save
@@ -1021,8 +1018,6 @@ function saveAnswerHistory(question, userAnswer, isCorrect) {
     // Sync to API for logged-in users
     syncAnswerHistory(question, userAnswer, isCorrect);
 }
-
-const getQuestionHistory = window.Storage.getQuestionHistory;
 
 function filterQuestionsByHistory(questions, filterType) {
     const history = getAnswerHistory();
@@ -1066,7 +1061,6 @@ async function clearAnswerHistory() {
 }
 
 // Unknown Words - using window.Storage from src/utils/storage.js
-const getUnknownWords = window.Storage.getUnknownWords;
 
 function toggleUnknownWord(word) {
     // Use storage utility and sync to API
@@ -1125,8 +1119,6 @@ function renderUnknownWords() {
 }
 
 // Stats - using window.Storage from src/utils/storage.js
-const getStats = window.Storage.getStats;
-const updateStatsData = window.Storage.updateStatsData;
 
 function updateStats() {
     const stats = getStats();
@@ -1181,10 +1173,6 @@ function resetStats() {
 
 // ==================== DAILY STATS & STREAK ====================
 // Using window.Storage from src/utils/storage.js
-const getTodayKey = window.Storage.getTodayKey;
-const getDailyStats = window.Storage.getDailyStats;
-const getDailyGoal = window.Storage.getDailyGoal;
-const getStreak = window.Storage.getStreak;
 
 function setDailyGoal(goal) {
     window.Storage.setDailyGoal(goal);
@@ -1311,8 +1299,6 @@ function initGoalEventListeners() {
 
 // ==================== FAVORITES ====================
 // Using window.Storage from src/utils/storage.js
-const getFavorites = window.Storage.getFavorites;
-const isFavorite = window.Storage.isFavorite;
 
 function toggleFavorite() {
     const q = currentQuiz.questions[currentQuiz.currentIndex];
@@ -1467,6 +1453,7 @@ function initKeyboardShortcuts() {
 }
 
 function handleQuizKeyboard(e) {
+    if (!e.key) return; // Guard against undefined key
     const key = e.key.toUpperCase();
     const feedback = document.getElementById('feedback');
     
@@ -1693,7 +1680,6 @@ function handleExamSwipe(e) {
 document.addEventListener('DOMContentLoaded', initSwipeSupport);
 
 // Utility - using window.Helpers.shuffleArray from src/utils/helpers.js
-const shuffleArray = window.Helpers.shuffleArray;
 
 // ==================== EXAM SIMULATION ====================
 let examState = {
@@ -2533,17 +2519,37 @@ async function fetchGPTExplanationForQuestion(wrongAnswerIndex) {
 }
 
 async function fetchGPTExplanation(question, userAnswer) {
-    const response = await fetch(`${window.API.URL}/gpt-explain`, {
+    // Build prompt for GPT
+    let optionsText = '';
+    let options = question.options;
+    if (typeof options === 'string') {
+        try { options = JSON.parse(options); } catch (e) { options = []; }
+    }
+    if (options && typeof options === 'object' && !Array.isArray(options)) {
+        options = Array.isArray(options.options) ? options.options : [];
+    }
+    if (Array.isArray(options)) {
+        optionsText = options.map(o => `${o.letter}) ${o.text}`).join('\n');
+    }
+    
+    const prompt = `YDS/YÖKDİL sorusu:
+
+${question.question_text}
+
+Seçenekler:
+${optionsText}
+
+Öğrencinin cevabı: ${userAnswer}
+Doğru cevap: ${question.correct_answer}
+
+Bu soruyu açıkla: Neden ${question.correct_answer} doğru cevap? Öğrenci ${userAnswer} seçtiyse neden yanlış?`;
+
+    const response = await fetch(`${window.API.URL}/openai-explain`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-            question: question.question_text,
-            userAnswer: userAnswer,
-            options: question.options,
-            correctAnswer: question.correct_answer
-        })
+        body: JSON.stringify({ prompt })
     });
 
     if (!response.ok) {
