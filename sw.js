@@ -22,11 +22,8 @@ self.addEventListener('activate', event => {
   self.clients.claim();
 });
 
-// Fetch - always go to network, no caching
-self.addEventListener('fetch', event => {
-  // Let all requests go to network directly
-  return;
-});
+// No fetch handler - let browser handle all requests directly
+// Removing the no-op fetch handler eliminates navigation overhead warning
 
 // Handle messages from the app
 self.addEventListener('message', event => {

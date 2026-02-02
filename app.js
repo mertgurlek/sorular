@@ -66,7 +66,7 @@ async function handleLogin() {
     }
     
     try {
-        const response = await fetch(`${window.API.URL}/auth/login`, {
+        const response = await fetch(`${window.API.URL}/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password })
@@ -108,7 +108,7 @@ async function handleRegister() {
     }
     
     try {
-        const response = await fetch(`${window.API.URL}/auth/register`, {
+        const response = await fetch(`${window.API.URL}/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, email, password })
@@ -187,11 +187,8 @@ let currentQuiz = {
     timerInterval: null
 };
 
-// OpenAI API Configuration
-const OPENAI_CONFIG = {
-    apiKey: '', // API key should be set via environment variable or server-side
-    model: 'gpt-4o-mini'
-};
+// OpenAI API Configuration - use from window.Constants (loaded from src/utils/constants.js)
+// const OPENAI_CONFIG is defined in src/utils/constants.js
 
 // Use STORAGE_KEYS from window.Storage (loaded from src/utils/storage.js)
 
@@ -945,42 +942,27 @@ function exitQuiz() {
     }
 }
 
-// Wrong Answers
-function getWrongAnswers() {
-    return JSON.parse(localStorage.getItem(window.Storage.KEYS.WRONG_ANSWERS) || '[]');
-}
+// Wrong Answers - using window.Storage from src/utils/storage.js
+const getWrongAnswers = window.Storage.getWrongAnswers;
 
 function saveWrongAnswer(question, userAnswer) {
-    const wrongAnswers = getWrongAnswers();
+    // Use storage utility and sync to API
+    const wasAdded = window.Storage.saveWrongAnswer(question, userAnswer);
     
-    // Check if already exists
-    const exists = wrongAnswers.some(w => 
-        w.question.question_text === question.question_text
-    );
-    
-    if (!exists) {
-        wrongAnswers.push({
-            question,
-            userAnswer,
-            timestamp: new Date().toISOString()
-        });
-        localStorage.setItem(window.Storage.KEYS.WRONG_ANSWERS, JSON.stringify(wrongAnswers));
-        
+    if (wasAdded) {
         // Sync to API for logged-in users
         syncWrongAnswer(question, userAnswer);
     }
 }
 
 function removeWrongAnswer(index) {
-    const wrongAnswers = getWrongAnswers();
-    wrongAnswers.splice(index, 1);
-    localStorage.setItem(window.Storage.KEYS.WRONG_ANSWERS, JSON.stringify(wrongAnswers));
+    window.Storage.removeWrongAnswer(index);
     renderWrongAnswers();
 }
 
 async function clearWrongAnswers() {
     if (confirm('Tüm yanlış cevapları silmek istediğinize emin misiniz?')) {
-        localStorage.setItem(window.Storage.KEYS.WRONG_ANSWERS, '[]');
+        window.Storage.clearWrongAnswers();
         
         // Clear from API for logged-in users
         if (isLoggedIn()) {
@@ -1028,51 +1010,19 @@ function renderWrongAnswers() {
 }
 
 // ==================== ANSWER HISTORY ====================
-function getAnswerHistory() {
-    return JSON.parse(localStorage.getItem(window.Storage.KEYS.ANSWER_HISTORY) || '{}');
-}
-
-function getQuestionKey(question) {
-    // Create a unique key for the question based on its text
-    return btoa(unescape(encodeURIComponent(question.question_text.substring(0, 100)))).replace(/[^a-zA-Z0-9]/g, '');
-}
+// Using window.Storage from src/utils/storage.js
+const getAnswerHistory = window.Storage.getAnswerHistory;
+const getQuestionKey = window.Storage.getQuestionKey;
 
 function saveAnswerHistory(question, userAnswer, isCorrect) {
-    const history = getAnswerHistory();
-    const key = getQuestionKey(question);
-    
-    if (!history[key]) {
-        history[key] = {
-            questionId: question.id,
-            questionText: question.question_text.substring(0, 100),
-            category: question.category,
-            attempts: []
-        };
-    }
-    
-    history[key].attempts.push({
-        userAnswer,
-        isCorrect,
-        timestamp: new Date().toISOString()
-    });
-    
-    // Keep last status for quick filtering
-    history[key].lastCorrect = isCorrect;
-    history[key].totalAttempts = history[key].attempts.length;
-    history[key].correctCount = history[key].attempts.filter(a => a.isCorrect).length;
-    history[key].wrongCount = history[key].attempts.filter(a => !a.isCorrect).length;
-    
-    localStorage.setItem(window.Storage.KEYS.ANSWER_HISTORY, JSON.stringify(history));
+    // Use storage utility for local save
+    window.Storage.saveAnswerHistory(question, userAnswer, isCorrect);
     
     // Sync to API for logged-in users
     syncAnswerHistory(question, userAnswer, isCorrect);
 }
 
-function getQuestionHistory(question) {
-    const history = getAnswerHistory();
-    const key = getQuestionKey(question);
-    return history[key] || null;
-}
+const getQuestionHistory = window.Storage.getQuestionHistory;
 
 function filterQuestionsByHistory(questions, filterType) {
     const history = getAnswerHistory();
@@ -1100,7 +1050,7 @@ function filterQuestionsByHistory(questions, filterType) {
 
 async function clearAnswerHistory() {
     if (confirm('Tüm cevap geçmişini silmek istediğinize emin misiniz?')) {
-        localStorage.setItem(window.Storage.KEYS.ANSWER_HISTORY, '{}');
+        window.Storage.clearAnswerHistory();
         
         // Clear from API for logged-in users
         if (isLoggedIn()) {
@@ -1115,44 +1065,28 @@ async function clearAnswerHistory() {
     }
 }
 
-// Unknown Words
-function getUnknownWords() {
-    return JSON.parse(localStorage.getItem(window.Storage.KEYS.UNKNOWN_WORDS) || '[]');
-}
+// Unknown Words - using window.Storage from src/utils/storage.js
+const getUnknownWords = window.Storage.getUnknownWords;
 
 function toggleUnknownWord(word) {
-    const words = getUnknownWords();
-    const index = words.indexOf(word.toLowerCase());
-    const isAdding = index === -1;
-    
-    if (isAdding) {
-        words.push(word.toLowerCase());
-    } else {
-        words.splice(index, 1);
-    }
-    
-    localStorage.setItem(window.Storage.KEYS.UNKNOWN_WORDS, JSON.stringify(words));
+    // Use storage utility and sync to API
+    const isAdding = window.Storage.toggleUnknownWord(word);
     
     // Sync to API for logged-in users
     syncUnknownWord(word.toLowerCase(), isAdding);
 }
 
 function removeUnknownWord(word) {
-    const words = getUnknownWords();
-    const index = words.indexOf(word);
-    if (index !== -1) {
-        words.splice(index, 1);
-        localStorage.setItem(window.Storage.KEYS.UNKNOWN_WORDS, JSON.stringify(words));
-        
-        // Sync to API for logged-in users
-        syncUnknownWord(word, false);
-    }
+    window.Storage.removeUnknownWord(word);
+    
+    // Sync to API for logged-in users
+    syncUnknownWord(word, false);
     renderUnknownWords();
 }
 
 async function clearUnknownWords() {
     if (confirm('Tüm bilmediğiniz kelimeleri silmek istediğinize emin misiniz?')) {
-        localStorage.setItem(window.Storage.KEYS.UNKNOWN_WORDS, '[]');
+        window.Storage.clearUnknownWords();
         
         // Clear from API for logged-in users
         if (isLoggedIn()) {
@@ -1190,26 +1124,9 @@ function renderUnknownWords() {
     `).join('');
 }
 
-// Stats
-function getStats() {
-    return JSON.parse(localStorage.getItem(window.Storage.KEYS.STATS) || '{}');
-}
-
-function updateStatsData(category, isCorrect) {
-    const stats = getStats();
-    
-    if (!stats[category]) {
-        stats[category] = { correct: 0, wrong: 0 };
-    }
-    
-    if (isCorrect) {
-        stats[category].correct++;
-    } else {
-        stats[category].wrong++;
-    }
-    
-    localStorage.setItem(window.Storage.KEYS.STATS, JSON.stringify(stats));
-}
+// Stats - using window.Storage from src/utils/storage.js
+const getStats = window.Storage.getStats;
+const updateStatsData = window.Storage.updateStatsData;
 
 function updateStats() {
     const stats = getStats();
@@ -1257,47 +1174,28 @@ function updateStats() {
 
 function resetStats() {
     if (confirm('Tüm istatistikleri sıfırlamak istediğinize emin misiniz?')) {
-        localStorage.setItem(window.Storage.KEYS.STATS, '{}');
-        localStorage.setItem(window.Storage.KEYS.DAILY_STATS, '{}');
-        localStorage.setItem(window.Storage.KEYS.STREAK, JSON.stringify({ days: 0, lastDate: null }));
+        window.Storage.resetStats();
         updateStats();
     }
 }
 
 // ==================== DAILY STATS & STREAK ====================
-function getTodayKey() {
-    return new Date().toISOString().split('T')[0];
-}
-
-function getDailyStats() {
-    return JSON.parse(localStorage.getItem(window.Storage.KEYS.DAILY_STATS) || '{}');
-}
-
-function getDailyGoal() {
-    return parseInt(localStorage.getItem(window.Storage.KEYS.DAILY_GOAL) || '20');
-}
+// Using window.Storage from src/utils/storage.js
+const getTodayKey = window.Storage.getTodayKey;
+const getDailyStats = window.Storage.getDailyStats;
+const getDailyGoal = window.Storage.getDailyGoal;
+const getStreak = window.Storage.getStreak;
 
 function setDailyGoal(goal) {
-    localStorage.setItem(window.Storage.KEYS.DAILY_GOAL, goal.toString());
+    window.Storage.setDailyGoal(goal);
     updateGoalDisplay();
 }
 
-function getStreak() {
-    return JSON.parse(localStorage.getItem(window.Storage.KEYS.STREAK) || '{"days": 0, "lastDate": null}');
-}
-
 function updateDailyStats() {
-    const today = getTodayKey();
-    const dailyStats = getDailyStats();
+    // Use storage utility for local update
+    window.Storage.updateDailyStats();
     
-    if (!dailyStats[today]) {
-        dailyStats[today] = { answered: 0, correct: 0 };
-    }
-    dailyStats[today].answered++;
-    
-    localStorage.setItem(window.Storage.KEYS.DAILY_STATS, JSON.stringify(dailyStats));
-    
-    // Update streak
+    // Update streak and goal display
     updateStreak();
     updateGoalDisplay();
     
@@ -1306,15 +1204,8 @@ function updateDailyStats() {
 }
 
 function updateDailyCorrect() {
-    const today = getTodayKey();
-    const dailyStats = getDailyStats();
-    
-    if (!dailyStats[today]) {
-        dailyStats[today] = { answered: 0, correct: 0 };
-    }
-    dailyStats[today].correct++;
-    
-    localStorage.setItem(window.Storage.KEYS.DAILY_STATS, JSON.stringify(dailyStats));
+    // Use storage utility for local update
+    window.Storage.updateDailyCorrect();
     
     // Sync to API for logged-in users
     syncDailyStats();
@@ -1346,7 +1237,7 @@ function updateStreak() {
             streak.days = 1;
             streak.lastDate = today;
         }
-        localStorage.setItem(window.Storage.KEYS.STREAK, JSON.stringify(streak));
+        window.Storage.setItem(window.Storage.KEYS.STREAK, streak);
     }
 }
 
@@ -1419,32 +1310,24 @@ function initGoalEventListeners() {
 }
 
 // ==================== FAVORITES ====================
-function getFavorites() {
-    return JSON.parse(localStorage.getItem(window.Storage.KEYS.FAVORITES) || '[]');
-}
-
-function isFavorite(questionText) {
-    const favorites = getFavorites();
-    return favorites.some(f => f.question_text === questionText);
-}
+// Using window.Storage from src/utils/storage.js
+const getFavorites = window.Storage.getFavorites;
+const isFavorite = window.Storage.isFavorite;
 
 function toggleFavorite() {
     const q = currentQuiz.questions[currentQuiz.currentIndex];
-    const favorites = getFavorites();
-    const index = favorites.findIndex(f => f.question_text === q.question_text);
-    const isAdding = index === -1;
+    const isCurrentlyFavorite = isFavorite(q.question_text);
     
-    if (isAdding) {
-        favorites.push(q);
+    if (isCurrentlyFavorite) {
+        window.Storage.removeFavorite(q.question_text);
     } else {
-        favorites.splice(index, 1);
+        window.Storage.addFavorite(q);
     }
     
-    localStorage.setItem(window.Storage.KEYS.FAVORITES, JSON.stringify(favorites));
     updateFavoriteButton();
     
     // Sync to API for logged-in users
-    syncFavorite(q, isAdding);
+    syncFavorite(q, !isCurrentlyFavorite);
 }
 
 function updateFavoriteButton() {
@@ -1464,11 +1347,10 @@ function updateFavoriteButton() {
 function removeFavorite(index) {
     const favorites = getFavorites();
     const removedQuestion = favorites[index];
-    favorites.splice(index, 1);
-    localStorage.setItem(window.Storage.KEYS.FAVORITES, JSON.stringify(favorites));
     
-    // Sync to API for logged-in users
     if (removedQuestion) {
+        window.Storage.removeFavorite(removedQuestion.question_text);
+        // Sync to API for logged-in users
         syncFavorite(removedQuestion, false);
     }
     
@@ -1477,7 +1359,7 @@ function removeFavorite(index) {
 
 async function clearFavorites() {
     if (confirm('Tüm favorileri silmek istediğinize emin misiniz?')) {
-        localStorage.setItem(window.Storage.KEYS.FAVORITES, '[]');
+        window.Storage.clearFavorites();
         
         // Clear from API for logged-in users
         if (isLoggedIn()) {
@@ -1810,15 +1692,8 @@ function handleExamSwipe(e) {
 // Initialize swipe after DOM loaded
 document.addEventListener('DOMContentLoaded', initSwipeSupport);
 
-// Utility
-function shuffleArray(array) {
-    const shuffled = [...array];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    return shuffled;
-}
+// Utility - using window.Helpers.shuffleArray from src/utils/helpers.js
+const shuffleArray = window.Helpers.shuffleArray;
 
 // ==================== EXAM SIMULATION ====================
 let examState = {

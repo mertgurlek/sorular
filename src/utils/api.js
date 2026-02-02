@@ -56,14 +56,14 @@ class APIError extends Error {
 // Auth API
 const AuthAPI = {
     async login(username, password) {
-        return apiRequest('/auth/login', {
+        return apiRequest('/login', {
             method: 'POST',
             body: { username, password }
         });
     },
     
     async register(username, email, password) {
-        return apiRequest('/auth/register', {
+        return apiRequest('/register', {
             method: 'POST',
             body: { username, email, password }
         });
