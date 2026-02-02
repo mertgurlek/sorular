@@ -720,6 +720,7 @@ function showQuestion() {
     
     // Extract options - handle nested structure
     let options = q.options;
+    console.log('DEBUG - Question options:', q.id, typeof options, Array.isArray(options), options);
     if (typeof options === 'string') {
         try {
             options = JSON.parse(options);
