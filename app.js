@@ -419,6 +419,7 @@ async function loadCategories() {
             let question_tr = null;
             let tip = null;
             let difficulty = null;
+            let explanation = null;
             
             if (optionsData && typeof optionsData === 'object' && !Array.isArray(optionsData)) {
                 options = Array.isArray(optionsData.options) ? optionsData.options : [];
@@ -426,9 +427,16 @@ async function loadCategories() {
                 question_tr = optionsData.question_tr || null;
                 tip = optionsData.tip || null;
                 difficulty = optionsData.difficulty || null;
+                explanation = optionsData.explanation || null;
             } else if (Array.isArray(optionsData)) {
                 options = optionsData;
             }
+            
+            // Also check top-level fields from the question object
+            explanation = explanation || q.explanation || null;
+            explanation_tr = explanation_tr || q.explanation_tr || null;
+            tip = tip || q.tip || null;
+            question_tr = question_tr || q.question_tr || null;
             
             return {
                 ...q,
@@ -436,7 +444,8 @@ async function loadCategories() {
                 explanation_tr: explanation_tr,
                 question_tr: question_tr,
                 tip: tip,
-                difficulty: difficulty
+                difficulty: difficulty,
+                explanation: explanation
             };
         });
         
@@ -695,8 +704,92 @@ function showQuestion() {
         updateGPTPanelButton();
     }
     
+    // Setup hint button
+    setupHintButton(q);
+    
     // Start timer if enabled
     startTimer();
+}
+
+// ==================== HINT SYSTEM ====================
+function setupHintButton(question) {
+    const hintArea = document.getElementById('hintArea');
+    const hintBtn = document.getElementById('hintBtn');
+    const hintContent = document.getElementById('hintContent');
+    
+    console.log('🔍 setupHintButton called:', { 
+        hintArea: !!hintArea, 
+        hintBtn: !!hintBtn, 
+        hintContent: !!hintContent,
+        tip: question.tip,
+        explanation_tr: question.explanation_tr,
+        question_tr: question.question_tr
+    });
+    
+    if (!hintArea || !hintBtn || !hintContent) {
+        console.error('❌ Hint elements not found!');
+        return;
+    }
+    
+    // Check if question has hint data (check multiple possible field names)
+    const hasHint = question.tip || question.explanation_tr || question.question_tr || question.explanation;
+    
+    console.log('🔍 hasHint:', hasHint, 'fields:', {
+        tip: question.tip,
+        explanation_tr: question.explanation_tr,
+        question_tr: question.question_tr,
+        explanation: question.explanation
+    });
+    
+    if (hasHint) {
+        hintArea.classList.remove('hidden');
+        hintContent.classList.add('hidden');
+        hintBtn.innerHTML = '<span>💡 İpucu</span>';
+        
+        // Build hint content - use available fields
+        let hintHtml = '';
+        if (question.tip) {
+            hintHtml += `<p class="hint-tip">💡 <strong>İpucu:</strong> ${question.tip}</p>`;
+        }
+        if (question.question_tr) {
+            hintHtml += `<p class="hint-translation">🇹🇷 <strong>Türkçe:</strong> ${question.question_tr}</p>`;
+        }
+        // Show explanation as hint if no other hint available
+        if (!question.tip && !question.question_tr) {
+            const explanationText = question.explanation_tr || question.explanation;
+            if (explanationText) {
+                hintHtml += `<p class="hint-tip">💡 <strong>İpucu:</strong> ${explanationText}</p>`;
+            }
+        }
+        
+        hintContent.innerHTML = hintHtml || '<p>Bu soru için ipucu bulunmuyor.</p>';
+        
+        // Remove old listener and add new one
+        const newHintBtn = hintBtn.cloneNode(true);
+        hintBtn.parentNode.replaceChild(newHintBtn, hintBtn);
+        newHintBtn.addEventListener('click', toggleHint);
+    } else {
+        hintArea.classList.add('hidden');
+    }
+}
+
+function toggleHint() {
+    const hintBtn = document.getElementById('hintBtn');
+    const hintContent = document.getElementById('hintContent');
+    
+    if (!hintContent) return;
+    
+    const isHidden = hintContent.classList.contains('hidden');
+    
+    if (isHidden) {
+        hintContent.classList.remove('hidden');
+        hintBtn.innerHTML = '<span>💡 İpucu Gizle</span>';
+        hintBtn.classList.add('active');
+    } else {
+        hintContent.classList.add('hidden');
+        hintBtn.innerHTML = '<span>💡 İpucu</span>';
+        hintBtn.classList.remove('active');
+    }
 }
 
 // Timer Functions
@@ -878,7 +971,16 @@ function selectAnswer(letter) {
     } else {
         currentQuiz.wrong++;
         feedback.classList.add('wrong');
+        
+        // Add GPT explain button at the top for wrong answers
+        const gptButtonHtml = `
+            <button class="gpt-explain-inline-btn" onclick="openGPTPanel(); askGPTFromPanel();">
+                🤖 Bu Soruyu Açıkla
+            </button>
+        `;
+        
         feedback.innerHTML = `
+            ${gptButtonHtml}
             <p id="feedbackText">✗ Yanlış! Doğru cevap: ${q.correct_answer}</p>
             ${explanationHtml}
         `;
@@ -2532,17 +2634,30 @@ async function fetchGPTExplanation(question, userAnswer) {
         optionsText = options.map(o => `${o.letter}) ${o.text}`).join('\n');
     }
     
-    const prompt = `YDS/YÖKDİL sorusu:
+    const prompt = `Aşağıdaki YDS/YÖKDİL sorusunu öğrenciye açıkla.
 
+📝 SORU:
 ${question.question_text}
 
-Seçenekler:
+📋 SEÇENEKLER:
 ${optionsText}
 
-Öğrencinin cevabı: ${userAnswer}
-Doğru cevap: ${question.correct_answer}
+❌ Öğrencinin Cevabı: ${userAnswer}
+✅ Doğru Cevap: ${question.correct_answer}
 
-Bu soruyu açıkla: Neden ${question.correct_answer} doğru cevap? Öğrenci ${userAnswer} seçtiyse neden yanlış?`;
+Lütfen şu formatta açıkla:
+
+1. **Doğru Cevap Neden ${question.correct_answer}?**
+   - Gramer kuralını basitçe açıkla
+   - Cümlede nasıl uygulandığını göster
+
+2. **${userAnswer} Neden Yanlış?**
+   - Öğrencinin hatasını nazikçe açıkla
+
+3. **Hatırlatma**
+   - Bu konuyla ilgili kısa bir ipucu ver
+
+Basit ve anlaşılır Türkçe kullan. Öğrenciyi motive et.`;
 
     const response = await fetch(`${window.API.URL}/openai-explain`, {
         method: 'POST',

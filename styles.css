@@ -931,6 +931,90 @@ body:not(.dark-mode) .icon-moon { display: none; }
     margin-top: 4px;
 }
 
+/* GPT Inline Button in Feedback */
+.feedback .gpt-explain-inline-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 14px 20px;
+    margin-bottom: 16px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    color: white !important;
+    border: none;
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+.feedback .gpt-explain-inline-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+}
+
+/* Hint System */
+.hint-area {
+    margin-bottom: 16px;
+}
+
+.btn-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 18px;
+    background: linear-gradient(135deg, #fdcb6e 0%, #f39c12 100%);
+    color: #1a1a2e;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(243, 156, 18, 0.3);
+}
+
+.btn-hint:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(243, 156, 18, 0.4);
+}
+
+.btn-hint.active {
+    background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+}
+
+.hint-content {
+    margin-top: 12px;
+    padding: 16px;
+    background: rgba(253, 203, 110, 0.1);
+    border: 1px solid rgba(253, 203, 110, 0.3);
+    border-radius: var(--radius-sm);
+    animation: fadeIn 0.3s ease-out;
+}
+
+.hint-content p {
+    margin: 0 0 8px 0;
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+.hint-content p:last-child {
+    margin-bottom: 0;
+}
+
+.hint-tip {
+    color: #fdcb6e !important;
+}
+
+.hint-translation {
+    color: var(--text-secondary) !important;
+    font-style: italic;
+}
+
 /* Quiz Actions */
 .quiz-actions {
     display: flex;
@@ -2859,4 +2943,75 @@ body:not(.dark-mode) .icon-moon { display: none; }
 .db-explanation .explanation-difficulty {
     color: var(--text-secondary);
     font-size: 0.85rem;
+}
+
+/* GPT Inline Explain Button */
+.gpt-explain-inline-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 14px 20px;
+    margin-bottom: 16px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+.gpt-explain-inline-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+}
+
+.gpt-explain-inline-btn:active {
+    transform: translateY(0);
+}
+
+/* Panel Open - Responsive Layout Fix */
+.app-wrapper.panel-open {
+    display: flex;
+}
+
+.app-wrapper.panel-open .container {
+    flex: 1;
+    max-width: calc(100% - 380px);
+    margin-right: 0;
+    transition: max-width 0.3s ease;
+}
+
+@media (max-width: 1200px) {
+    .app-wrapper.panel-open .container {
+        max-width: calc(100% - 350px);
+    }
+    
+    .gpt-chat-panel {
+        width: 350px;
+    }
+}
+
+@media (max-width: 900px) {
+    .app-wrapper.panel-open .container {
+        max-width: 100%;
+        opacity: 0.3;
+        pointer-events: none;
+    }
+    
+    .gpt-chat-panel {
+        width: 100%;
+        max-width: 100%;
+    }
+}
+
+@media (max-width: 600px) {
+    .gpt-explain-inline-btn {
+        padding: 12px 16px;
+        font-size: 0.95rem;
+    }
 }

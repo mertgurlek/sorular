@@ -336,12 +336,16 @@ app.post('/api/openai-explain', async (req, res) => {
     try {
         const apiKey = process.env.OPENAI_API_KEY;
         const { prompt, model } = req.body || {};
+        
+        console.log('OpenAI explain request:', { hasPrompt: !!prompt, promptLength: prompt?.length, model });
 
         if (!apiKey) {
+            console.error('OpenAI API key not configured');
             return res.status(500).json({ error: 'OPENAI_API_KEY is not configured' });
         }
 
         if (!prompt || typeof prompt !== 'string') {
+            console.error('Invalid prompt:', { prompt: typeof prompt, body: req.body });
             return res.status(400).json({ error: 'prompt is required' });
         }
 
@@ -421,7 +425,7 @@ app.get('/api/questions', async (req, res) => {
         
         let query = `
             SELECT id, question_number, question_text, options, correct_answer, 
-                   category, url, test_url
+                   category, url, test_url, tip, explanation_tr, question_tr, difficulty
             FROM questions
         `;
         let params = [];
