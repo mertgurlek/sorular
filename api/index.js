@@ -439,12 +439,33 @@ app.get('/api/questions', async (req, res) => {
         
         const result = await pool.query(query, params);
         
-        // Ensure options is always an array
-        const questions = result.rows.map(q => ({
-            ...q,
-            options: Array.isArray(q.options) ? q.options : 
-                    (typeof q.options === 'string' ? JSON.parse(q.options) : [])
-        }));
+        // Parse options - handle both array and nested object formats
+        const questions = result.rows.map(q => {
+            let options = q.options;
+            
+            // If string, parse it
+            if (typeof options === 'string') {
+                try { options = JSON.parse(options); } catch (e) { options = []; }
+            }
+            
+            // If nested object with 'options' key, extract inner options and extra fields
+            if (options && typeof options === 'object' && !Array.isArray(options)) {
+                return {
+                    ...q,
+                    options: Array.isArray(options.options) ? options.options : [],
+                    tip: options.tip || q.tip || null,
+                    explanation_tr: options.explanation_tr || q.explanation_tr || null,
+                    question_tr: options.question_tr || q.question_tr || null,
+                    difficulty: options.difficulty || q.difficulty || null
+                };
+            }
+            
+            // If already an array, use as-is
+            return {
+                ...q,
+                options: Array.isArray(options) ? options : []
+            };
+        });
         
         res.json({
             success: true,
