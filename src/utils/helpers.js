@@ -91,9 +91,10 @@ function extractQuestionExtras(question) {
     return extras;
 }
 
-// Make words clickable in text
+// Make words clickable in text (supports Turkish and English characters)
 function makeWordsClickable(text, unknownWords = []) {
-    return text.replace(/([a-zA-Z'-]+)/g, (match) => {
+    // Unicode property escapes for letters + Turkish specific chars + apostrophe/hyphen
+    return text.replace(/([a-zA-ZçÇğĞıİöÖşŞüÜ'-]+)/g, (match) => {
         const isUnknown = unknownWords.includes(match.toLowerCase());
         return `<span class="word ${isUnknown ? 'unknown' : ''}" data-word="${match.toLowerCase()}">${match}</span>`;
     });

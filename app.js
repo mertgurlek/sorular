@@ -897,7 +897,8 @@ function timeUp() {
 
 function makeWordsClickable(text) {
     const unknownWords = getUnknownWords();
-    return text.replace(/([a-zA-Z'-]+)/g, (match) => {
+    // Turkish + English characters support
+    return text.replace(/([a-zA-ZçÇğĞıİöÖşŞüÜ'-]+)/g, (match) => {
         const isUnknown = unknownWords.includes(match.toLowerCase());
         return `<span class="word ${isUnknown ? 'unknown' : ''}" data-word="${match.toLowerCase()}">${match}</span>`;
     });
