@@ -4,6 +4,33 @@ async function initDatabase() {
     const pool = getPool();
     
     try {
+        // ==================== QUESTIONS ====================
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS questions (
+                id SERIAL PRIMARY KEY,
+                question_number VARCHAR(20),
+                question_text TEXT NOT NULL,
+                options JSONB NOT NULL,
+                correct_answer VARCHAR(5) NOT NULL,
+                category VARCHAR(100) NOT NULL,
+                url TEXT,
+                test_url TEXT,
+                question_tr TEXT,
+                explanation_tr TEXT,
+                tested_skill VARCHAR(200),
+                difficulty VARCHAR(20) DEFAULT 'medium',
+                tip TEXT,
+                is_valid BOOLEAN DEFAULT true,
+                gpt_status VARCHAR(20),
+                gpt_verified_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        
+        await pool.query(`CREATE INDEX IF NOT EXISTS idx_questions_category ON questions(category)`);
+        await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_questions_text_category ON questions(md5(question_text), category)`);
+        
+        // ==================== USERS ====================
         await pool.query(`
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
@@ -15,6 +42,7 @@ async function initDatabase() {
             )
         `);
         
+        // ==================== USER STATS ====================
         await pool.query(`
             CREATE TABLE IF NOT EXISTS user_stats (
                 id SERIAL PRIMARY KEY,
@@ -28,6 +56,9 @@ async function initDatabase() {
             )
         `);
         
+        await pool.query(`CREATE INDEX IF NOT EXISTS idx_user_stats_user_id ON user_stats(user_id)`);
+        
+        // ==================== USER WRONG ANSWERS ====================
         await pool.query(`
             CREATE TABLE IF NOT EXISTS user_wrong_answers (
                 id SERIAL PRIMARY KEY,
@@ -40,6 +71,9 @@ async function initDatabase() {
             )
         `);
         
+        await pool.query(`CREATE INDEX IF NOT EXISTS idx_user_wrong_answers_user_id ON user_wrong_answers(user_id)`);
+        
+        // ==================== GPT EXPLANATIONS ====================
         await pool.query(`
             CREATE TABLE IF NOT EXISTS gpt_explanations (
                 id SERIAL PRIMARY KEY,
@@ -50,6 +84,7 @@ async function initDatabase() {
             )
         `);
         
+        // ==================== USER UNKNOWN WORDS ====================
         await pool.query(`
             CREATE TABLE IF NOT EXISTS user_unknown_words (
                 id SERIAL PRIMARY KEY,
@@ -60,6 +95,9 @@ async function initDatabase() {
             )
         `);
         
+        await pool.query(`CREATE INDEX IF NOT EXISTS idx_user_unknown_words_user_id ON user_unknown_words(user_id)`);
+        
+        // ==================== USER ANSWER HISTORY ====================
         await pool.query(`
             CREATE TABLE IF NOT EXISTS user_answer_history (
                 id SERIAL PRIMARY KEY,
@@ -73,11 +111,9 @@ async function initDatabase() {
             )
         `);
         
-        await pool.query(`
-            CREATE INDEX IF NOT EXISTS idx_answer_history_user_question 
-            ON user_answer_history(user_id, question_hash)
-        `);
+        await pool.query(`CREATE INDEX IF NOT EXISTS idx_answer_history_user_question ON user_answer_history(user_id, question_hash)`);
         
+        // ==================== USER FAVORITES ====================
         await pool.query(`
             CREATE TABLE IF NOT EXISTS user_favorites (
                 id SERIAL PRIMARY KEY,
@@ -90,6 +126,9 @@ async function initDatabase() {
             )
         `);
         
+        await pool.query(`CREATE INDEX IF NOT EXISTS idx_user_favorites_user_id ON user_favorites(user_id)`);
+        
+        // ==================== USER DAILY STATS ====================
         await pool.query(`
             CREATE TABLE IF NOT EXISTS user_daily_stats (
                 id SERIAL PRIMARY KEY,

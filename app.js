@@ -407,46 +407,24 @@ async function loadCategories() {
             throw new Error('Failed to load questions');
         }
         
-        // Store all questions - handle nested options structure and extract extra fields
+        // Store all questions - options is a plain array, enrichment fields are top-level columns
         allQuestions = questionsData.questions.map(q => {
-            let optionsData = q.options;
-            if (typeof optionsData === 'string') {
-                try { optionsData = JSON.parse(optionsData); } catch (e) { optionsData = {}; }
+            let options = q.options;
+            if (typeof options === 'string') {
+                try { options = JSON.parse(options); } catch (e) { options = []; }
             }
             
-            // Extract extra fields from nested structure
-            let options = [];
-            let explanation_tr = null;
-            let question_tr = null;
-            let tip = null;
-            let difficulty = null;
-            let explanation = null;
-            
-            if (optionsData && typeof optionsData === 'object' && !Array.isArray(optionsData)) {
-                options = Array.isArray(optionsData.options) ? optionsData.options : [];
-                explanation_tr = optionsData.explanation_tr || null;
-                question_tr = optionsData.question_tr || null;
-                tip = optionsData.tip || null;
-                difficulty = optionsData.difficulty || null;
-                explanation = optionsData.explanation || null;
-            } else if (Array.isArray(optionsData)) {
-                options = optionsData;
+            // Legacy support: if options is a nested object with .options array, extract it
+            if (options && typeof options === 'object' && !Array.isArray(options)) {
+                options = Array.isArray(options.options) ? options.options : [];
             }
-            
-            // Also check top-level fields from the question object
-            explanation = explanation || q.explanation || null;
-            explanation_tr = explanation_tr || q.explanation_tr || null;
-            tip = tip || q.tip || null;
-            question_tr = question_tr || q.question_tr || null;
+            if (!Array.isArray(options)) {
+                options = [];
+            }
             
             return {
                 ...q,
-                options: options,
-                explanation_tr: explanation_tr,
-                question_tr: question_tr,
-                tip: tip,
-                difficulty: difficulty,
-                explanation: explanation
+                options: options
             };
         });
         

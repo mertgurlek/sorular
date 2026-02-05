@@ -1,4 +1,4 @@
-const { query } = require('../lib/db');
+const { query } = require('../db');
 
 class UserService {
     async updateStats(userId, { totalAnswered, totalCorrect, totalWrong, streakDays }) {

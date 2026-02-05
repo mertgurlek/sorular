@@ -1,5 +1,5 @@
 const bcrypt = require('bcryptjs');
-const { query } = require('../lib/db');
+const { query } = require('../db');
 
 class AuthService {
     async findUserByUsername(username) {

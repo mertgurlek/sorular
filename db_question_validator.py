@@ -14,25 +14,13 @@ import os
 import time
 from datetime import datetime
 from openai import AsyncOpenAI
-from dotenv import load_dotenv
-import psycopg2
 from psycopg2.extras import RealDictCursor
-from psycopg2 import pool
 
-load_dotenv()
-load_dotenv(".env.local")
+from scripts.config import get_database_url, get_openai_key
+from scripts.db_utils import get_db_connection, execute_query, db_manager
 
-client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-DATABASE_URL = os.getenv("DATABASE_URL")
-if DATABASE_URL:
-    if DATABASE_URL.startswith("psql '"):
-        DATABASE_URL = DATABASE_URL[6:-1]
-    elif DATABASE_URL.startswith("psql "):
-        DATABASE_URL = DATABASE_URL[5:]
-    DATABASE_URL = DATABASE_URL.strip("'\"")
-
-connection_pool = None
+client = AsyncOpenAI(api_key=get_openai_key())
+DATABASE_URL = get_database_url()
 
 CONCURRENT_LIMIT = 5
 BATCH_SIZE = 10
@@ -162,47 +150,8 @@ Kategori: {category}"""
             return {**question, "error": str(e), "processed": False}
 
 
-def init_connection_pool():
-    """Bağlantı havuzunu başlat"""
-    global connection_pool
-    if connection_pool is None:
-        connection_pool = pool.ThreadedConnectionPool(
-            1, 10, DATABASE_URL,
-            connect_timeout=30
-        )
-    return connection_pool
-
-def get_db_connection(retries=3):
-    """Veritabanı bağlantısı oluştur - retry mekanizması ile"""
-    global connection_pool
-    
-    for attempt in range(retries):
-        try:
-            if connection_pool:
-                return connection_pool.getconn()
-            return psycopg2.connect(DATABASE_URL, connect_timeout=30)
-        except Exception as e:
-            if attempt < retries - 1:
-                print(f"  ⚠️ Bağlantı hatası, yeniden deneniyor ({attempt + 1}/{retries})...")
-                time.sleep(2 ** attempt)
-            else:
-                raise e
-
-def release_db_connection(conn):
-    """Bağlantıyı havuza geri ver"""
-    global connection_pool
-    if connection_pool and conn:
-        try:
-            connection_pool.putconn(conn)
-        except:
-            pass
-
-
-def update_schema():
-    """Veritabanı şemasını güncelle - yeni alanları ekle"""
-    conn = get_db_connection()
-    cur = conn.cursor()
-    
+def ensure_schema():
+    """Veritabanı şemasını güncelle - yeni alanları ekle (idempotent)"""
     alter_statements = [
         "ALTER TABLE questions ADD COLUMN IF NOT EXISTS question_tr TEXT",
         "ALTER TABLE questions ADD COLUMN IF NOT EXISTS explanation_tr TEXT",
@@ -214,15 +163,15 @@ def update_schema():
         "ALTER TABLE questions ADD COLUMN IF NOT EXISTS gpt_verified_at TIMESTAMP"
     ]
     
-    for stmt in alter_statements:
-        try:
-            cur.execute(stmt)
-        except Exception as e:
-            print(f"  ⚠️ {stmt[:50]}... - {e}")
-    
-    conn.commit()
-    cur.close()
-    conn.close()
+    with get_db_connection() as conn:
+        cur = conn.cursor()
+        for stmt in alter_statements:
+            try:
+                cur.execute(stmt)
+            except Exception as e:
+                print(f"  ⚠️ {stmt[:50]}... - {e}")
+        conn.commit()
+        cur.close()
     print("✅ Veritabanı şeması güncellendi")
 
 
@@ -238,128 +187,104 @@ def parse_options_from_jsonb(options_jsonb):
 
 def get_categories():
     """Veritabanındaki kategorileri getir"""
-    conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
-    
-    cur.execute("""
-        SELECT DISTINCT category, COUNT(*) as count 
-        FROM questions 
-        WHERE category IS NOT NULL
-        GROUP BY category 
-        ORDER BY count DESC
-    """)
-    
-    categories = cur.fetchall()
-    cur.close()
-    conn.close()
-    
-    return categories
+    return execute_query(
+        """SELECT DISTINCT category, COUNT(*) as count 
+           FROM questions 
+           WHERE category IS NOT NULL
+           GROUP BY category 
+           ORDER BY count DESC""",
+        fetch_all=True, use_dict_cursor=True
+    )
 
 
 def get_questions_by_category(category: str, limit: int = None, offset: int = 0):
     """Kategoriye göre soruları getir"""
-    conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
-    
-    query = """
+    sql = """
         SELECT id, question_text, options, correct_answer, category
         FROM questions 
         WHERE category = %s
         AND (gpt_verified_at IS NULL OR gpt_status IS NULL)
         ORDER BY id
     """
+    params = (category,)
     
     if limit:
-        query += f" LIMIT {limit} OFFSET {offset}"
+        sql += f" LIMIT {limit} OFFSET {offset}"
     
-    cur.execute(query, (category,))
-    questions = cur.fetchall()
-    cur.close()
-    conn.close()
-    
-    return questions
+    return execute_query(sql, params, fetch_all=True, use_dict_cursor=True)
 
 
 def update_question_in_db(result: dict, retries=3):
     """Doğrulanmış soruyu veritabanında güncelle - retry mekanizması ile"""
     
     for attempt in range(retries):
-        conn = None
         try:
-            conn = get_db_connection()
-            cur = conn.cursor()
-            
-            options = result.get("options", [])
-            options_json = json.dumps(options, ensure_ascii=False)
-            
-            if result.get("status") == "regenerated":
-                cur.execute("""
-                    UPDATE questions SET
-                        question_text = %s,
-                        options = %s::jsonb,
-                        correct_answer = %s,
-                        question_tr = %s,
-                        explanation_tr = %s,
-                        tested_skill = %s,
-                        difficulty = %s,
-                        tip = %s,
-                        is_valid = %s,
-                        gpt_status = %s,
-                        gpt_verified_at = %s
-                    WHERE id = %s
-                """, (
-                    result.get("question_text"),
-                    options_json,
-                    result.get("correct_answer"),
-                    result.get("question_tr"),
-                    result.get("explanation_tr"),
-                    result.get("tested_skill"),
-                    result.get("difficulty"),
-                    result.get("tip"),
-                    result.get("is_valid", True),
-                    result.get("status"),
-                    datetime.now(),
-                    result.get("id")
-                ))
-            else:
-                cur.execute("""
-                    UPDATE questions SET
-                        correct_answer = COALESCE(%s, correct_answer),
-                        question_tr = %s,
-                        explanation_tr = %s,
-                        tested_skill = %s,
-                        difficulty = %s,
-                        tip = %s,
-                        is_valid = %s,
-                        gpt_status = %s,
-                        gpt_verified_at = %s
-                    WHERE id = %s
-                """, (
-                    result.get("correct_answer"),
-                    result.get("question_tr"),
-                    result.get("explanation_tr"),
-                    result.get("tested_skill"),
-                    result.get("difficulty"),
-                    result.get("tip"),
-                    result.get("is_valid", True),
-                    result.get("status"),
-                    datetime.now(),
-                    result.get("id")
-                ))
-            
-            conn.commit()
-            cur.close()
-            release_db_connection(conn)
+            with get_db_connection() as conn:
+                cur = conn.cursor()
+                
+                options = result.get("options", [])
+                options_json = json.dumps(options, ensure_ascii=False)
+                
+                if result.get("status") == "regenerated":
+                    cur.execute("""
+                        UPDATE questions SET
+                            question_text = %s,
+                            options = %s::jsonb,
+                            correct_answer = %s,
+                            question_tr = %s,
+                            explanation_tr = %s,
+                            tested_skill = %s,
+                            difficulty = %s,
+                            tip = %s,
+                            is_valid = %s,
+                            gpt_status = %s,
+                            gpt_verified_at = %s
+                        WHERE id = %s
+                    """, (
+                        result.get("question_text"),
+                        options_json,
+                        result.get("correct_answer"),
+                        result.get("question_tr"),
+                        result.get("explanation_tr"),
+                        result.get("tested_skill"),
+                        result.get("difficulty"),
+                        result.get("tip"),
+                        result.get("is_valid", True),
+                        result.get("status"),
+                        datetime.now(),
+                        result.get("id")
+                    ))
+                else:
+                    cur.execute("""
+                        UPDATE questions SET
+                            correct_answer = COALESCE(%s, correct_answer),
+                            question_tr = %s,
+                            explanation_tr = %s,
+                            tested_skill = %s,
+                            difficulty = %s,
+                            tip = %s,
+                            is_valid = %s,
+                            gpt_status = %s,
+                            gpt_verified_at = %s
+                        WHERE id = %s
+                    """, (
+                        result.get("correct_answer"),
+                        result.get("question_tr"),
+                        result.get("explanation_tr"),
+                        result.get("tested_skill"),
+                        result.get("difficulty"),
+                        result.get("tip"),
+                        result.get("is_valid", True),
+                        result.get("status"),
+                        datetime.now(),
+                        result.get("id")
+                    ))
+                
+                conn.commit()
+                cur.close()
             return True
             
         except Exception as e:
-            if conn:
-                try:
-                    conn.rollback()
-                except:
-                    pass
-                release_db_connection(conn)
-            
             if attempt < retries - 1:
                 time.sleep(2 ** attempt)
             else:
@@ -431,7 +356,7 @@ async def main():
     print("="*60)
     
     print("\n📦 Veritabanı şeması güncelleniyor...")
-    update_schema()
+    ensure_schema()
     
     print("\n📋 Kategoriler yükleniyor...")
     categories = get_categories()

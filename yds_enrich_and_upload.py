@@ -21,24 +21,15 @@ import sys
 import time
 from datetime import datetime
 from openai import AsyncOpenAI
-from dotenv import load_dotenv
-import psycopg2
 from psycopg2.extras import Json
 
 sys.stdout.reconfigure(line_buffering=True)
 
-load_dotenv()
-load_dotenv(".env.local")
+from scripts.config import get_database_url, get_openai_key
+from scripts.db_utils import get_db_connection, execute_query, check_question_exists
 
-client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-DATABASE_URL = os.getenv("DATABASE_URL")
-if DATABASE_URL:
-    if DATABASE_URL.startswith("psql '"):
-        DATABASE_URL = DATABASE_URL[6:-1]
-    elif DATABASE_URL.startswith("psql "):
-        DATABASE_URL = DATABASE_URL[5:]
-    DATABASE_URL = DATABASE_URL.strip("'\"")
+client = AsyncOpenAI(api_key=get_openai_key())
+DATABASE_URL = get_database_url()
 
 CONCURRENT_LIMIT = 10  # Daha hızlı işlem için artırıldı
 
@@ -154,83 +145,67 @@ Kategori: {category}"""
             return {**question, "error": str(e), "enriched": False}
 
 
-def get_db_connection():
-    """Yeni database bağlantısı oluştur"""
-    return psycopg2.connect(DATABASE_URL, connect_timeout=30)
-
-
 def insert_to_db(questions: list, category: str) -> tuple:
-    """Zenginleştirilmiş soruları PostgreSQL'e ekle - her seferinde yeni bağlantı"""
+    """Zenginleştirilmiş soruları PostgreSQL'e ekle - options sadece şıkları içerir, zenginleştirme alanları sütunlara yazılır"""
     inserted = 0
     skipped = 0
     
-    # Batch halinde işle
     batch_size = 50
     for batch_start in range(0, len(questions), batch_size):
         batch = questions[batch_start:batch_start + batch_size]
         
         try:
-            conn = get_db_connection()
-            cur = conn.cursor()
-            
-            for q in batch:
-                if not q.get("enriched") or not q.get("correct_answer"):
-                    skipped += 1
-                    continue
+            with get_db_connection() as conn:
+                cur = conn.cursor()
                 
-                question_text = q.get("question_text", "").strip()
-                if not question_text:
-                    skipped += 1
-                    continue
-                
-                try:
-                    # Önce bu soru var mı kontrol et
-                    cur.execute("""
-                        SELECT id FROM questions 
-                        WHERE question_text = %s AND category = %s
-                    """, (question_text, category))
-                    
-                    if cur.fetchone():
+                for q in batch:
+                    if not q.get("enriched") or not q.get("correct_answer"):
                         skipped += 1
                         continue
                     
-                    # Zenginleştirilmiş bilgileri options içine ekle
-                    options = q.get("options", [])
-                    enriched_data = {
-                        "options": options,
-                        "question_tr": q.get("question_tr", ""),
-                        "explanation_tr": q.get("explanation_tr", ""),
-                        "tested_skill": q.get("tested_skill", ""),
-                        "difficulty": q.get("difficulty", "medium"),
-                        "tip": q.get("tip", "")
-                    }
+                    question_text = q.get("question_text", "").strip()
+                    if not question_text:
+                        skipped += 1
+                        continue
                     
-                    cur.execute("""
-                        INSERT INTO questions (
-                            question_text, options, correct_answer, category, url, test_url
-                        ) VALUES (%s, %s, %s, %s, %s, %s)
-                    """, (
-                        question_text,
-                        Json(enriched_data),
-                        q.get("correct_answer"),
-                        category,
-                        q.get("url", ""),
-                        q.get("test_url", "")
-                    ))
-                    inserted += 1
+                    try:
+                        if check_question_exists(question_text, category):
+                            skipped += 1
+                            continue
                         
-                except Exception as e:
-                    print(f"   ❌ DB Hata (soru): {e}")
-                    skipped += 1
-                    continue
-            
-            conn.commit()
-            cur.close()
-            conn.close()
+                        options = q.get("options", [])
+                        
+                        cur.execute("""
+                            INSERT INTO questions (
+                                question_text, options, correct_answer, category, 
+                                url, test_url, question_tr, explanation_tr, 
+                                tested_skill, difficulty, tip
+                            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        """, (
+                            question_text,
+                            Json(options),
+                            q.get("correct_answer"),
+                            category,
+                            q.get("url", ""),
+                            q.get("test_url", ""),
+                            q.get("question_tr", ""),
+                            q.get("explanation_tr", ""),
+                            q.get("tested_skill", ""),
+                            q.get("difficulty", "medium"),
+                            q.get("tip", "")
+                        ))
+                        inserted += 1
+                            
+                    except Exception as e:
+                        print(f"   ❌ DB Hata (soru): {e}")
+                        skipped += 1
+                        continue
+                
+                conn.commit()
+                cur.close()
             
         except Exception as e:
             print(f"   ❌ DB Bağlantı Hatası: {e}")
-            # Retry with new connection
             time.sleep(2)
             continue
     

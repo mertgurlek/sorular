@@ -52,6 +52,7 @@ def create_tables(conn):
     """Create database tables if they don't exist."""
     cursor = conn.cursor()
     
+    # ==================== QUESTIONS ====================
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS questions (
             id SERIAL PRIMARY KEY,
@@ -62,15 +63,22 @@ def create_tables(conn):
             category VARCHAR(100) NOT NULL,
             url TEXT,
             test_url TEXT,
+            question_tr TEXT,
+            explanation_tr TEXT,
+            tested_skill VARCHAR(200),
+            difficulty VARCHAR(20) DEFAULT 'medium',
+            tip TEXT,
+            is_valid BOOLEAN DEFAULT true,
+            gpt_status VARCHAR(20),
+            gpt_verified_at TIMESTAMP,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
     
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_questions_category 
-        ON questions(category)
-    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_questions_category ON questions(category)")
+    cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_questions_text_category ON questions(md5(question_text), category)")
     
+    # ==================== USERS ====================
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id SERIAL PRIMARY KEY,
@@ -82,6 +90,7 @@ def create_tables(conn):
         )
     """)
     
+    # ==================== USER STATS ====================
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS user_stats (
             id SERIAL PRIMARY KEY,
@@ -95,16 +104,24 @@ def create_tables(conn):
         )
     """)
     
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_stats_user_id ON user_stats(user_id)")
+    
+    # ==================== USER WRONG ANSWERS ====================
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS user_wrong_answers (
             id SERIAL PRIMARY KEY,
             user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-            question_id INTEGER REFERENCES questions(id),
+            question_text TEXT NOT NULL,
+            category VARCHAR(100),
             user_answer VARCHAR(10),
+            correct_answer VARCHAR(10),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
     
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_wrong_answers_user_id ON user_wrong_answers(user_id)")
+    
+    # ==================== GPT EXPLANATIONS ====================
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS gpt_explanations (
             id SERIAL PRIMARY KEY,
@@ -112,6 +129,62 @@ def create_tables(conn):
             question_text TEXT,
             explanation TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    
+    # ==================== USER UNKNOWN WORDS ====================
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS user_unknown_words (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+            word VARCHAR(100) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, word)
+        )
+    """)
+    
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_unknown_words_user_id ON user_unknown_words(user_id)")
+    
+    # ==================== USER ANSWER HISTORY ====================
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS user_answer_history (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+            question_hash VARCHAR(100) NOT NULL,
+            question_text TEXT,
+            category VARCHAR(100),
+            user_answer VARCHAR(10),
+            is_correct BOOLEAN,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_answer_history_user_question ON user_answer_history(user_id, question_hash)")
+    
+    # ==================== USER FAVORITES ====================
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS user_favorites (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+            question_id INTEGER,
+            question_text TEXT NOT NULL,
+            question_data JSONB,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, question_text)
+        )
+    """)
+    
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_favorites_user_id ON user_favorites(user_id)")
+    
+    # ==================== USER DAILY STATS ====================
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS user_daily_stats (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+            date DATE NOT NULL,
+            answered INTEGER DEFAULT 0,
+            correct INTEGER DEFAULT 0,
+            UNIQUE(user_id, date)
         )
     """)
     
