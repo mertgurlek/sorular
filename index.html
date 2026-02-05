@@ -15,6 +15,7 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <link rel="icon" type="image/png" href="icons/icon-192.png">
 </head>
 <body class="dark-mode">
     <!-- Auth Screen -->
@@ -26,44 +27,44 @@
             </div>
             
             <!-- Login Form -->
-            <div id="loginForm" class="auth-form">
+            <form id="loginForm" class="auth-form" onsubmit="return false;">
                 <h2>Giriş Yap</h2>
                 <div class="form-group">
                     <label for="loginUsername">Kullanıcı Adı veya Email</label>
-                    <input type="text" id="loginUsername" placeholder="kullaniciadi veya email@example.com">
+                    <input type="text" id="loginUsername" placeholder="kullaniciadi veya email@example.com" autocomplete="username">
                 </div>
                 <div class="form-group">
                     <label for="loginPassword">Şifre</label>
-                    <input type="password" id="loginPassword" placeholder="••••••••">
+                    <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password">
                 </div>
                 <div id="loginError" class="auth-error"></div>
-                <button id="loginBtn" class="btn btn-primary btn-large btn-full">Giriş Yap</button>
+                <button id="loginBtn" class="btn btn-primary btn-large btn-full" type="button">Giriş Yap</button>
                 <p class="auth-switch">
                     Hesabınız yok mu? <a href="#" id="showRegister">Kayıt Ol</a>
                 </p>
-            </div>
+            </form>
             
             <!-- Register Form -->
-            <div id="registerForm" class="auth-form hidden">
+            <form id="registerForm" class="auth-form hidden" onsubmit="return false;">
                 <h2>Kayıt Ol</h2>
                 <div class="form-group">
                     <label for="registerUsername">Kullanıcı Adı</label>
-                    <input type="text" id="registerUsername" placeholder="kullaniciadi">
+                    <input type="text" id="registerUsername" placeholder="kullaniciadi" autocomplete="username">
                 </div>
                 <div class="form-group">
                     <label for="registerEmail">Email</label>
-                    <input type="email" id="registerEmail" placeholder="email@example.com">
+                    <input type="email" id="registerEmail" placeholder="email@example.com" autocomplete="email">
                 </div>
                 <div class="form-group">
                     <label for="registerPassword">Şifre (min 6 karakter)</label>
-                    <input type="password" id="registerPassword" placeholder="••••••••">
+                    <input type="password" id="registerPassword" placeholder="••••••••" autocomplete="new-password">
                 </div>
                 <div id="registerError" class="auth-error"></div>
-                <button id="registerBtn" class="btn btn-primary btn-large btn-full">Kayıt Ol</button>
+                <button id="registerBtn" class="btn btn-primary btn-large btn-full" type="button">Kayıt Ol</button>
                 <p class="auth-switch">
                     Zaten hesabınız var mı? <a href="#" id="showLogin">Giriş Yap</a>
                 </p>
-            </div>
+            </form>
             
             <!-- Guest Mode -->
             <div class="auth-divider">
@@ -581,23 +582,69 @@
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="enableLives">
-                        <span>❤️ Can Sistemi (Yanlış cevaplarda can kaybı)</span>
-                    </label>
-                </div>
-                <div id="livesCountSection" class="form-group hidden">
-                    <label for="maxLives">Toplam Can:</label>
-                    <select id="maxLives">
-                        <option value="3">3 ❤️</option>
-                        <option value="5">5 ❤️</option>
-                        <option value="10">10 ❤️</option>
-                    </select>
+                <!-- Game Settings -->
+                <div class="room-settings-section">
+                    <label class="settings-section-title">Oyun Ayarları</label>
+                    <div class="room-settings-grid">
+                        <!-- Süre Limiti -->
+                        <div class="room-setting-card">
+                            <div class="setting-header">
+                                <span class="setting-icon">⏱️</span>
+                                <span class="setting-title">Soru Süresi</span>
+                            </div>
+                            <select id="roomTimeLimit" class="setting-select">
+                                <option value="0">Süresiz</option>
+                                <option value="15">15 saniye</option>
+                                <option value="30" selected>30 saniye</option>
+                                <option value="45">45 saniye</option>
+                                <option value="60">60 saniye</option>
+                                <option value="90">90 saniye</option>
+                                <option value="120">2 dakika</option>
+                            </select>
+                        </div>
+
+                        <!-- Can Sistemi -->
+                        <div class="room-setting-card">
+                            <div class="setting-header">
+                                <span class="setting-icon">❤️</span>
+                                <span class="setting-title">Can Sistemi</span>
+                            </div>
+                            <select id="livesSelect" class="setting-select">
+                                <option value="0">Kapalı</option>
+                                <option value="3">3 Can</option>
+                                <option value="5">5 Can</option>
+                                <option value="10">10 Can</option>
+                            </select>
+                        </div>
+
+                        <!-- Soru Karıştırma -->
+                        <div class="room-setting-card">
+                            <div class="setting-header">
+                                <span class="setting-icon">🔀</span>
+                                <span class="setting-title">Soru Sırası</span>
+                            </div>
+                            <select id="roomShuffleQuestions" class="setting-select">
+                                <option value="shuffle" selected>Karışık</option>
+                                <option value="ordered">Sıralı</option>
+                            </select>
+                        </div>
+
+                        <!-- Puan Sistemi -->
+                        <div class="room-setting-card">
+                            <div class="setting-header">
+                                <span class="setting-icon">🏆</span>
+                                <span class="setting-title">Puanlama</span>
+                            </div>
+                            <select id="roomScoring" class="setting-select">
+                                <option value="speed" selected>Hız Bonuslu</option>
+                                <option value="normal">Standart</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
 
                 <div id="createRoomError" class="auth-error"></div>
-                <button id="submitCreateRoom" class="btn btn-primary btn-large">🚀 Oda Oluştur</button>
+                <button id="submitCreateRoom" class="btn btn-primary btn-large btn-full">🚀 Oda Oluştur</button>
             </div>
 
             <!-- Join Room Form -->
@@ -630,6 +677,7 @@
                 <div class="room-info-bar">
                     <span>📝 <span id="lobbyQuestionCount">0</span> Soru</span>
                     <span>👥 <span id="lobbyParticipantCount">0</span> Katılımcı</span>
+                    <span id="lobbyTimeLimitInfo" class="hidden">⏱️ <span id="lobbyTimeLimit">30</span>s</span>
                     <span id="lobbyLivesInfo" class="hidden">❤️ <span id="lobbyMaxLives">3</span> Can</span>
                 </div>
 
@@ -650,15 +698,15 @@
 
             <!-- Challenge Game Area -->
             <div id="challenge-game" class="card hidden">
-                <div class="challenge-game-header">
-                    <div class="challenge-progress">
-                        Soru <span id="challengeCurrentQ">1</span> / <span id="challengeTotalQ">10</span>
+                <div class="quiz-header">
+                    <div class="quiz-progress">
+                        <span id="challengeCurrentQ">1</span> / <span id="challengeTotalQ">10</span>
                     </div>
-                    <div class="challenge-score-display">
+                    <div id="challengeLivesDisplay" class="challenge-lives hidden"></div>
+                    <div class="quiz-score">
                         <span class="correct">✓ <span id="challengeCorrect">0</span></span>
                         <span class="wrong">✗ <span id="challengeWrong">0</span></span>
                     </div>
-                    <div id="challengeLivesDisplay" class="challenge-lives hidden"></div>
                 </div>
 
                 <div class="progress-bar">
@@ -666,12 +714,18 @@
                 </div>
 
                 <div id="challengeQuestionContainer" class="question-container">
-                    <p id="challengeQuestionText" class="question-text"></p>
+                    <div class="question-header">
+                        <p id="challengeQuestionText" class="question-text"></p>
+                    </div>
                     <div id="challengeOptionsContainer" class="options-container"></div>
                 </div>
 
                 <div id="challengeFeedback" class="feedback hidden">
                     <p id="challengeFeedbackText"></p>
+                </div>
+
+                <div class="quiz-actions">
+                    <button id="challengeNextBtn" class="btn btn-primary hidden">Sonraki Soru →</button>
                 </div>
 
                 <!-- Live Scoreboard -->
@@ -680,10 +734,6 @@
                     <div id="liveScoreboard" class="live-scoreboard">
                         <!-- Updated in real-time -->
                     </div>
-                </div>
-
-                <div class="challenge-game-actions">
-                    <button id="challengeNextBtn" class="btn btn-primary hidden">Sonraki Soru →</button>
                 </div>
             </div>
 

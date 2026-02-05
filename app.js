@@ -3170,11 +3170,6 @@ function initChallenge() {
         });
     });
     
-    // Lives checkbox
-    document.getElementById('enableLives').addEventListener('change', (e) => {
-        document.getElementById('livesCountSection').classList.toggle('hidden', !e.target.checked);
-    });
-    
     // Load history when tab is opened
     loadChallengeHistory();
 }
@@ -3232,8 +3227,10 @@ async function handleCreateRoom() {
     const username = getChallengeUsername();
     const name = document.getElementById('roomName').value.trim() || `${username}'in Odası`;
     const mode = document.querySelector('input[name="challengeMode"]:checked').value;
-    const enableLives = document.getElementById('enableLives').checked;
-    const maxLives = parseInt(document.getElementById('maxLives').value);
+    const livesValue = parseInt(document.getElementById('livesSelect').value);
+    const enableLives = livesValue > 0;
+    const maxLives = livesValue || 3;
+    const timeLimit = parseInt(document.getElementById('roomTimeLimit').value) || 0;
     
     let body = {
         name,
@@ -3241,7 +3238,8 @@ async function handleCreateRoom() {
         adminName: username,
         mode,
         enableLives,
-        maxLives
+        maxLives,
+        timeLimit
     };
     
     if (mode === 'custom') {
@@ -3338,6 +3336,11 @@ function showLobby() {
     document.getElementById('lobbyRoomName').textContent = challengeState.roomData.name;
     document.getElementById('lobbyRoomCode').textContent = challengeState.roomCode;
     document.getElementById('lobbyQuestionCount').textContent = challengeState.roomData.question_count || challengeState.roomData.actualQuestionCount || '?';
+    
+    if (challengeState.roomData.time_limit > 0) {
+        document.getElementById('lobbyTimeLimitInfo').classList.remove('hidden');
+        document.getElementById('lobbyTimeLimit').textContent = challengeState.roomData.time_limit;
+    }
     
     if (challengeState.roomData.enable_lives) {
         document.getElementById('lobbyLivesInfo').classList.remove('hidden');
@@ -3566,23 +3569,61 @@ function displayChallengeQuestion(data) {
     const progress = ((challengeState.currentQuestionIndex) / totalQ) * 100;
     document.getElementById('challengeProgressFill').style.width = `${progress}%`;
     
-    // Question text
-    document.getElementById('challengeQuestionText').textContent = question.question_text;
+    // Question text - use same clickable words as main quiz
+    const questionTextEl = document.getElementById('challengeQuestionText');
+    if (typeof makeWordsClickable === 'function') {
+        questionTextEl.innerHTML = makeWordsClickable(question.question_text);
+    } else {
+        questionTextEl.textContent = question.question_text;
+    }
     
-    // Options
+    // Parse options - same logic as main quiz to handle nested structure
+    let options = question.options;
+    if (typeof options === 'string') {
+        try { options = JSON.parse(options); } catch (e) { options = []; }
+    }
+    if (options && typeof options === 'object' && !Array.isArray(options)) {
+        if (Array.isArray(options.options)) {
+            options = options.options;
+        } else {
+            options = [];
+        }
+    }
+    if (!Array.isArray(options)) {
+        options = [];
+    }
+    
+    // Render options - same structure as main quiz
     const optionsContainer = document.getElementById('challengeOptionsContainer');
-    const options = question.options;
+    optionsContainer.innerHTML = '';
     
-    optionsContainer.innerHTML = Object.entries(options).map(([key, value]) => `
-        <button class="option" data-answer="${key}" onclick="handleChallengeAnswer('${key}')">
-            <span class="option-letter">${key}</span>
-            <span class="option-text">${value}</span>
-        </button>
-    `).join('');
+    options.forEach(opt => {
+        const optionDiv = document.createElement('div');
+        optionDiv.className = 'option';
+        optionDiv.dataset.letter = opt.letter;
+        
+        optionDiv.innerHTML = `
+            <button class="option-select-btn" title="Cevabı Seç">${opt.letter}</button>
+            <span class="text">${typeof makeWordsClickable === 'function' ? makeWordsClickable(opt.text) : opt.text}</span>
+        `;
+        
+        const selectBtn = optionDiv.querySelector('.option-select-btn');
+        selectBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            handleChallengeAnswer(opt.letter);
+        });
+        
+        optionsContainer.appendChild(optionDiv);
+    });
     
     // Hide feedback and next button
     document.getElementById('challengeFeedback').classList.add('hidden');
     document.getElementById('challengeNextBtn').classList.add('hidden');
+    
+    // Add click listeners to words
+    if (typeof addWordClickListeners === 'function') {
+        addWordClickListeners();
+    }
     
     // Start answer timer
     challengeState.answerStartTime = Date.now();
@@ -3592,9 +3633,9 @@ async function handleChallengeAnswer(answer) {
     const answerTimeMs = Date.now() - challengeState.answerStartTime;
     
     // Disable all options
-    document.querySelectorAll('#challengeOptionsContainer .option').forEach(btn => {
-        btn.disabled = true;
-        btn.style.pointerEvents = 'none';
+    document.querySelectorAll('#challengeOptionsContainer .option').forEach(opt => {
+        opt.style.pointerEvents = 'none';
+        opt.classList.add('disabled');
     });
     
     try {
@@ -3623,11 +3664,11 @@ async function handleChallengeAnswer(answer) {
         
         // Highlight correct/wrong options
         document.querySelectorAll('#challengeOptionsContainer .option').forEach(btn => {
-            const btnAnswer = btn.dataset.answer;
-            if (btnAnswer === data.correctAnswer) {
+            const btnLetter = btn.dataset.letter;
+            if (btnLetter === data.correctAnswer) {
                 btn.classList.add('correct');
             }
-            if (btnAnswer === answer && !data.isCorrect) {
+            if (btnLetter === answer && !data.isCorrect) {
                 btn.classList.add('wrong');
             }
         });

@@ -3329,26 +3329,6 @@ body:not(.dark-mode) .icon-moon { display: none; }
 }
 
 /* Challenge Game */
-.challenge-game-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 12px;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-
-.challenge-progress {
-    font-weight: 600;
-    color: var(--text-primary);
-}
-
-.challenge-score-display {
-    display: flex;
-    gap: 16px;
-    font-weight: 600;
-}
-
 .challenge-lives {
     display: flex;
     gap: 4px;
@@ -3405,11 +3385,6 @@ body:not(.dark-mode) .icon-moon { display: none; }
 .scoreboard-score {
     font-weight: 700;
     color: var(--text-primary);
-}
-
-.challenge-game-actions {
-    margin-top: 16px;
-    text-align: center;
 }
 
 /* Challenge Results */
@@ -3505,6 +3480,76 @@ body:not(.dark-mode) .icon-moon { display: none; }
     margin-top: 24px;
 }
 
+/* Room Settings Section */
+.room-settings-section {
+    margin-top: 8px;
+    margin-bottom: 20px;
+}
+
+.settings-section-title {
+    display: block;
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+}
+
+.room-settings-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.room-setting-card {
+    padding: 14px 16px;
+    background: var(--option-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: border-color 0.2s ease;
+}
+
+.room-setting-card:hover {
+    border-color: var(--accent);
+}
+
+.setting-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.setting-icon {
+    font-size: 1.2rem;
+}
+
+.setting-title {
+    font-weight: 600;
+    font-size: 0.88rem;
+    color: var(--text-primary);
+}
+
+.setting-select {
+    width: 100%;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 0.88rem;
+    font-family: inherit;
+    cursor: pointer;
+    appearance: auto;
+    transition: border-color 0.2s ease;
+}
+
+.setting-select:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
 /* Responsive */
 @media (max-width: 600px) {
     .challenge-actions-grid {
@@ -3519,6 +3564,10 @@ body:not(.dark-mode) .icon-moon { display: none; }
         grid-template-columns: 1fr;
     }
     
+    .room-settings-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+    
     .room-lobby-header {
         flex-direction: column;
         align-items: flex-start;
@@ -3527,5 +3576,11 @@ body:not(.dark-mode) .icon-moon { display: none; }
     .room-info-bar {
         flex-wrap: wrap;
         gap: 12px;
+    }
+}
+
+@media (max-width: 400px) {
+    .room-settings-grid {
+        grid-template-columns: 1fr;
     }
 }
