@@ -897,72 +897,8 @@ function generateRoomCode() {
     return code;
 }
 
-// Initialize challenge tables
-async function initChallengeTables() {
-    try {
-        await pool.query(`
-            CREATE TABLE IF NOT EXISTS challenge_rooms (
-                id SERIAL PRIMARY KEY,
-                room_code VARCHAR(8) UNIQUE NOT NULL,
-                name VARCHAR(100) NOT NULL,
-                admin_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-                admin_name VARCHAR(50) NOT NULL,
-                status VARCHAR(20) DEFAULT 'waiting',
-                question_count INTEGER NOT NULL,
-                current_question_index INTEGER DEFAULT 0,
-                categories JSONB DEFAULT '[]',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                started_at TIMESTAMP,
-                ended_at TIMESTAMP
-            )
-        `);
-
-        await pool.query(`
-            CREATE TABLE IF NOT EXISTS room_participants (
-                id SERIAL PRIMARY KEY,
-                room_id INTEGER REFERENCES challenge_rooms(id) ON DELETE CASCADE,
-                user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-                username VARCHAR(50) NOT NULL,
-                is_admin BOOLEAN DEFAULT FALSE,
-                is_ready BOOLEAN DEFAULT FALSE,
-                total_correct INTEGER DEFAULT 0,
-                total_wrong INTEGER DEFAULT 0,
-                joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(room_id, username)
-            )
-        `);
-
-        await pool.query(`
-            CREATE TABLE IF NOT EXISTS room_questions (
-                id SERIAL PRIMARY KEY,
-                room_id INTEGER REFERENCES challenge_rooms(id) ON DELETE CASCADE,
-                question_id INTEGER REFERENCES questions(id) ON DELETE CASCADE,
-                question_index INTEGER NOT NULL,
-                UNIQUE(room_id, question_index)
-            )
-        `);
-
-        await pool.query(`
-            CREATE TABLE IF NOT EXISTS room_answers (
-                id SERIAL PRIMARY KEY,
-                room_id INTEGER REFERENCES challenge_rooms(id) ON DELETE CASCADE,
-                participant_id INTEGER REFERENCES room_participants(id) ON DELETE CASCADE,
-                question_index INTEGER NOT NULL,
-                selected_answer VARCHAR(1),
-                is_correct BOOLEAN,
-                answered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(room_id, participant_id, question_index)
-            )
-        `);
-
-        console.log('Challenge tables initialized');
-    } catch (error) {
-        console.error('Challenge tables initialization error:', error);
-    }
-}
-
-initChallengeTables();
+// Initialize challenge tables (single source of truth)
+ensureChallengeTables();
 
 // YDS Gerçek Sınav Soru Dağılımı (80 soru toplam)
 const YDS_DISTRIBUTION = {
@@ -983,7 +919,7 @@ const YDS_DISTRIBUTION = {
 // Create Room
 app.post('/api/rooms/create', async (req, res) => {
     try {
-        const { name, adminId, adminName, mode, categoryQuestions, timeLimit, enableLives, maxLives } = req.body;
+        const { name, adminId, adminName, mode, categoryQuestions, timeLimit, enableLives, maxLives, shuffleQuestions, scoringMode } = req.body;
         
         if (!adminName) {
             return res.status(400).json({ success: false, error: 'Kullanıcı adı gerekli' });
@@ -1050,14 +986,17 @@ app.post('/api/rooms/create', async (req, res) => {
             return res.status(400).json({ success: false, error: 'Seçilen kategorilerde soru bulunamadı' });
         }
 
-        // Shuffle questions
-        questionsToSelect = questionsToSelect.sort(() => Math.random() - 0.5);
+        // Shuffle questions only if setting is enabled (default: true)
+        const shouldShuffle = shuffleQuestions !== false;
+        if (shouldShuffle) {
+            questionsToSelect = questionsToSelect.sort(() => Math.random() - 0.5);
+        }
 
         const roomResult = await pool.query(`
-            INSERT INTO challenge_rooms (room_code, name, admin_id, admin_name, question_count, categories, status, time_limit, enable_lives, max_lives)
-            VALUES ($1, $2, $3, $4, $5, $6, 'waiting', $7, $8, $9)
-            RETURNING id, room_code, name, admin_name, question_count, categories, status, created_at, time_limit, enable_lives, max_lives
-        `, [roomCode, name || `${adminName}'in Odası`, adminId || null, adminName, totalQuestionCount, JSON.stringify(categories), timeLimit || 0, enableLives || false, maxLives || 3]);
+            INSERT INTO challenge_rooms (room_code, name, admin_id, admin_name, question_count, categories, status, time_limit, enable_lives, max_lives, shuffle_questions, scoring_mode)
+            VALUES ($1, $2, $3, $4, $5, $6, 'waiting', $7, $8, $9, $10, $11)
+            RETURNING id, room_code, name, admin_name, question_count, categories, status, created_at, time_limit, enable_lives, max_lives, shuffle_questions, scoring_mode
+        `, [roomCode, name || `${adminName}'in Odası`, adminId || null, adminName, totalQuestionCount, JSON.stringify(categories), timeLimit || 0, enableLives || false, maxLives || 3, shouldShuffle, scoringMode || 'speed']);
 
         const room = roomResult.rows[0];
 
@@ -1112,6 +1051,8 @@ async function ensureChallengeTables() {
         await pool.query(`ALTER TABLE challenge_rooms ADD COLUMN IF NOT EXISTS enable_lives BOOLEAN DEFAULT FALSE`);
         await pool.query(`ALTER TABLE challenge_rooms ADD COLUMN IF NOT EXISTS max_lives INTEGER DEFAULT 3`);
         await pool.query(`ALTER TABLE challenge_rooms ADD COLUMN IF NOT EXISTS question_started_at TIMESTAMP`);
+        await pool.query(`ALTER TABLE challenge_rooms ADD COLUMN IF NOT EXISTS shuffle_questions BOOLEAN DEFAULT TRUE`);
+        await pool.query(`ALTER TABLE challenge_rooms ADD COLUMN IF NOT EXISTS scoring_mode VARCHAR(20) DEFAULT 'speed'`);
 
         // Room participants with score, streak, lives
         await pool.query(`
@@ -1259,10 +1200,10 @@ app.post('/api/rooms/join', async (req, res) => {
                 return res.status(400).json({ success: false, error: 'Yarışma başlamış, katılamazsınız' });
             }
             const newParticipant = await pool.query(`
-                INSERT INTO room_participants (room_id, user_id, username, is_admin, is_ready)
-                VALUES ($1, $2, $3, FALSE, FALSE)
+                INSERT INTO room_participants (room_id, user_id, username, is_admin, is_ready, lives)
+                VALUES ($1, $2, $3, FALSE, FALSE, $4)
                 RETURNING *
-            `, [room.id, userId || null, username]);
+            `, [room.id, userId || null, username, room.max_lives || 3]);
             participant = newParticipant.rows[0];
         }
 
@@ -1397,7 +1338,7 @@ app.post('/api/rooms/start', async (req, res) => {
 
         await pool.query(`
             UPDATE challenge_rooms 
-            SET status = 'active', started_at = CURRENT_TIMESTAMP, current_question_index = 0
+            SET status = 'active', started_at = CURRENT_TIMESTAMP, current_question_index = 0, question_started_at = CURRENT_TIMESTAMP
             WHERE id = $1
         `, [room.id]);
 
@@ -1450,7 +1391,7 @@ app.post('/api/rooms/answer', async (req, res) => {
         const correctAnswer = questionResult.rows[0].correct_answer;
         const isCorrect = answer === correctAnswer;
 
-        // Calculate points
+        // Calculate points using centralized scoring function
         let newStreak = isCorrect ? room.current_streak + 1 : 0;
         let maxStreak = Math.max(room.max_streak, newStreak);
         let pointsEarned = 0;
@@ -1458,13 +1399,8 @@ app.post('/api/rooms/answer', async (req, res) => {
         let isEliminated = false;
 
         if (isCorrect) {
-            // Calculate points with streak and speed bonus
-            pointsEarned = 100 + (room.current_streak * 10); // Base + streak bonus
-            
-            // Speed bonus (max 50 points for answers under 10 seconds)
-            if (answerTimeMs && answerTimeMs < 10000) {
-                pointsEarned += Math.round(50 * (1 - answerTimeMs / 10000));
-            }
+            // Use centralized calculatePoints with scoring_mode support
+            pointsEarned = calculatePoints(true, answerTimeMs, room.current_streak, room.scoring_mode || 'speed');
 
             // Check streak badges
             if (room.user_id) {
@@ -1552,13 +1488,11 @@ app.post('/api/rooms/next', async (req, res) => {
         const nextIndex = room.current_question_index + 1;
 
         if (nextIndex >= parseInt(room.total_questions)) {
-            await pool.query(`
-                UPDATE challenge_rooms SET status = 'finished', ended_at = CURRENT_TIMESTAMP WHERE id = $1
-            `, [room.id]);
+            await finishGame(room.id);
             return res.json({ success: true, finished: true });
         }
 
-        await pool.query(`UPDATE challenge_rooms SET current_question_index = $2 WHERE id = $1`, [room.id, nextIndex]);
+        await pool.query(`UPDATE challenge_rooms SET current_question_index = $2, question_started_at = CURRENT_TIMESTAMP WHERE id = $1`, [room.id, nextIndex]);
 
         res.json({ success: true, nextIndex });
 
@@ -1567,6 +1501,57 @@ app.post('/api/rooms/next', async (req, res) => {
         res.status(500).json({ success: false, error: 'Sunucu hatası' });
     }
 });
+
+// Centralized finish game helper - updates room status, challenge_stats, ELO
+async function finishGame(roomId) {
+    try {
+        await pool.query(`
+            UPDATE challenge_rooms SET status = 'finished', ended_at = CURRENT_TIMESTAMP WHERE id = $1
+        `, [roomId]);
+
+        // Get participants with user_ids for stats update
+        const participants = await pool.query(`
+            SELECT user_id, total_correct, total_wrong, score, max_streak
+            FROM room_participants WHERE room_id = $1 AND user_id IS NOT NULL
+            ORDER BY score DESC
+        `, [roomId]);
+
+        // Update challenge_stats for each registered user
+        for (const p of participants.rows) {
+            const isWinner = p === participants.rows[0] && participants.rows.length > 1;
+            const isPerfect = p.total_wrong === 0 && p.total_correct > 0;
+
+            await pool.query(`
+                INSERT INTO challenge_stats (user_id, total_games, total_wins, total_points, highest_streak)
+                VALUES ($1, 1, $2, $3, $4)
+                ON CONFLICT (user_id) DO UPDATE SET
+                    total_games = challenge_stats.total_games + 1,
+                    total_wins = challenge_stats.total_wins + $2,
+                    total_points = challenge_stats.total_points + $3,
+                    highest_streak = GREATEST(challenge_stats.highest_streak, $4),
+                    updated_at = CURRENT_TIMESTAMP
+            `, [p.user_id, isWinner ? 1 : 0, p.score || 0, p.max_streak || 0]);
+
+            // Award badges
+            if (isWinner) await awardBadge(p.user_id, 'first_win');
+            if (isPerfect) await awardBadge(p.user_id, 'perfect_game');
+
+            // Games played badges
+            const stats = await pool.query('SELECT total_games FROM challenge_stats WHERE user_id = $1', [p.user_id]);
+            const totalGames = stats.rows[0]?.total_games || 0;
+            if (totalGames >= 10) await awardBadge(p.user_id, 'games_10');
+            if (totalGames >= 50) await awardBadge(p.user_id, 'games_50');
+            if (totalGames >= 100) await awardBadge(p.user_id, 'games_100');
+        }
+
+        // Update ELO for top 2 players if both are registered users
+        if (participants.rows.length >= 2 && participants.rows[0].user_id && participants.rows[1].user_id) {
+            await updateEloRatings(participants.rows[0].user_id, participants.rows[1].user_id);
+        }
+    } catch (error) {
+        console.error('Finish game error:', error);
+    }
+}
 
 // End Game Early
 app.post('/api/rooms/end', async (req, res) => {
@@ -1581,9 +1566,7 @@ app.post('/api/rooms/end', async (req, res) => {
             return res.status(403).json({ success: false, error: 'Yetkiniz yok' });
         }
 
-        await pool.query(`
-            UPDATE challenge_rooms SET status = 'finished', ended_at = CURRENT_TIMESTAMP WHERE id = $1
-        `, [roomResult.rows[0].id]);
+        await finishGame(roomResult.rows[0].id);
 
         res.json({ success: true });
 
@@ -1607,12 +1590,12 @@ app.get('/api/rooms/:code/results', async (req, res) => {
         const room = roomResult.rows[0];
 
         const participantsResult = await pool.query(`
-            SELECT id, username, is_admin, total_correct, total_wrong,
+            SELECT id, username, is_admin, total_correct, total_wrong, score, max_streak,
                    CASE WHEN (total_correct + total_wrong) > 0 
                         THEN ROUND(total_correct * 100.0 / (total_correct + total_wrong), 1)
                         ELSE 0 END as percentage
             FROM room_participants WHERE room_id = $1
-            ORDER BY total_correct DESC, total_wrong ASC
+            ORDER BY score DESC, total_correct DESC, total_wrong ASC
         `, [room.id]);
 
         const answersResult = await pool.query(`
@@ -1982,7 +1965,7 @@ app.get('/api/rooms/:roomCode/chat', async (req, res) => {
 app.put('/api/rooms/:roomCode/settings', async (req, res) => {
     try {
         const { roomCode } = req.params;
-        const { timeLimit, enableLives, maxLives, gameMode, adminName } = req.body;
+        const { timeLimit, enableLives, maxLives, gameMode, adminName, scoringMode, shuffleQuestions } = req.body;
 
         const room = await pool.query('SELECT * FROM challenge_rooms WHERE room_code = $1', [roomCode]);
         if (room.rows.length === 0) {
@@ -1998,9 +1981,11 @@ app.put('/api/rooms/:roomCode/settings', async (req, res) => {
             SET time_limit = COALESCE($1, time_limit),
                 enable_lives = COALESCE($2, enable_lives),
                 max_lives = COALESCE($3, max_lives),
-                game_mode = COALESCE($4, game_mode)
-            WHERE room_code = $5
-        `, [timeLimit, enableLives, maxLives, gameMode, roomCode]);
+                game_mode = COALESCE($4, game_mode),
+                scoring_mode = COALESCE($5, scoring_mode),
+                shuffle_questions = COALESCE($6, shuffle_questions)
+            WHERE room_code = $7
+        `, [timeLimit, enableLives, maxLives, gameMode, scoringMode, shuffleQuestions, roomCode]);
 
         res.json({ success: true });
     } catch (error) {
@@ -2016,16 +2001,22 @@ const STREAK_BONUS = 10;
 const MAX_SPEED_BONUS = 50;
 const SPEED_BONUS_TIME = 10000; // 10 seconds for max speed bonus
 
-function calculatePoints(isCorrect, answerTimeMs, currentStreak, timeLimit) {
+function calculatePoints(isCorrect, answerTimeMs, currentStreak, scoringMode) {
     if (!isCorrect) return 0;
     
+    // Normal mode: flat points per correct answer (no speed/streak bonus)
+    if (scoringMode === 'normal') {
+        return BASE_POINTS;
+    }
+    
+    // Speed mode (default): base + streak bonus + speed bonus
     let points = BASE_POINTS;
     
     // Streak bonus
     points += currentStreak * STREAK_BONUS;
     
-    // Speed bonus (if time limit is set)
-    if (timeLimit > 0 && answerTimeMs < SPEED_BONUS_TIME) {
+    // Speed bonus (answers under 10 seconds get bonus)
+    if (answerTimeMs && answerTimeMs < SPEED_BONUS_TIME) {
         const speedBonus = Math.round(MAX_SPEED_BONUS * (1 - answerTimeMs / SPEED_BONUS_TIME));
         points += speedBonus;
     }

@@ -3186,7 +3186,9 @@ let challengeState = {
     lives: 3,
     isEliminated: false,
     userAnswers: {},
-    questionCache: {}
+    questionCache: {},
+    timerInterval: null,
+    timerRemaining: 0
 };
 
 function initChallenge() {
@@ -3252,6 +3254,7 @@ function showChallengeView(viewId) {
 
 function showChallengeMenu() {
     stopPolling();
+    stopChallengeTimer();
     showChallengeView('challenge-menu');
     loadChallengeHistory();
 }
@@ -3295,6 +3298,8 @@ async function handleCreateRoom() {
     const enableLives = livesValue > 0;
     const maxLives = livesValue || 3;
     const timeLimit = parseInt(document.getElementById('roomTimeLimit').value) || 0;
+    const shuffleQuestions = document.getElementById('roomShuffleQuestions').value === 'shuffle';
+    const scoringMode = document.getElementById('roomScoring').value;
     
     let body = {
         name,
@@ -3303,7 +3308,9 @@ async function handleCreateRoom() {
         mode,
         enableLives,
         maxLives,
-        timeLimit
+        timeLimit,
+        shuffleQuestions,
+        scoringMode
     };
     
     if (mode === 'custom') {
@@ -3400,6 +3407,10 @@ function showLobby() {
     document.getElementById('lobbyRoomName').textContent = challengeState.roomData.name;
     document.getElementById('lobbyRoomCode').textContent = challengeState.roomCode;
     document.getElementById('lobbyQuestionCount').textContent = challengeState.roomData.question_count || challengeState.roomData.actualQuestionCount || '?';
+    
+    // Reset info bars first to prevent stale data from previous rooms
+    document.getElementById('lobbyTimeLimitInfo').classList.add('hidden');
+    document.getElementById('lobbyLivesInfo').classList.add('hidden');
     
     if (challengeState.roomData.time_limit > 0) {
         document.getElementById('lobbyTimeLimitInfo').classList.remove('hidden');
@@ -3708,6 +3719,10 @@ function renderChallengeQuestion(question, room) {
     // Check if this question was already answered (revisiting)
     const prevAnswer = challengeState.userAnswers[challengeState.currentQuestionIndex];
     if (prevAnswer) {
+        // Stop timer and hide for answered questions
+        stopChallengeTimer();
+        document.getElementById('challengeTimerDisplay').classList.add('hidden');
+        
         // Show previous answer - disable options and highlight
         document.querySelectorAll('#challengeOptionsContainer .option').forEach(opt => {
             opt.style.pointerEvents = 'none';
@@ -3751,6 +3766,9 @@ function renderChallengeQuestion(question, room) {
         
         // Start answer timer
         challengeState.answerStartTime = Date.now();
+        
+        // Start countdown timer if time limit is set
+        startChallengeTimer();
     }
     
     // Add click listeners to words
@@ -3760,6 +3778,7 @@ function renderChallengeQuestion(question, room) {
 }
 
 async function handleChallengeAnswer(answer) {
+    stopChallengeTimer();
     const answerTimeMs = Date.now() - challengeState.answerStartTime;
     
     // Disable all options
@@ -3879,6 +3898,81 @@ function updateLivesDisplay() {
     display.innerHTML = hearts;
 }
 
+// ==================== CHALLENGE TIMER ====================
+function startChallengeTimer() {
+    stopChallengeTimer();
+    
+    const timeLimit = challengeState.roomData.time_limit;
+    if (!timeLimit || timeLimit <= 0) return;
+    
+    // Calculate remaining time from server's question_started_at
+    const questionStartedAt = challengeState.roomData.question_started_at;
+    if (questionStartedAt) {
+        const elapsed = Math.floor((Date.now() - new Date(questionStartedAt).getTime()) / 1000);
+        challengeState.timerRemaining = Math.max(0, timeLimit - elapsed);
+    } else {
+        challengeState.timerRemaining = timeLimit;
+    }
+    
+    const timerDisplay = document.getElementById('challengeTimerDisplay');
+    timerDisplay.classList.remove('hidden');
+    updateChallengeTimerDisplay();
+    
+    challengeState.timerInterval = setInterval(() => {
+        challengeState.timerRemaining--;
+        updateChallengeTimerDisplay();
+        
+        if (challengeState.timerRemaining <= 0) {
+            stopChallengeTimer();
+            challengeTimeUp();
+        }
+    }, 1000);
+}
+
+function stopChallengeTimer() {
+    if (challengeState.timerInterval) {
+        clearInterval(challengeState.timerInterval);
+        challengeState.timerInterval = null;
+    }
+}
+
+function updateChallengeTimerDisplay() {
+    const timerValue = document.getElementById('challengeTimerValue');
+    const timerDisplay = document.getElementById('challengeTimerDisplay');
+    
+    timerValue.textContent = challengeState.timerRemaining;
+    
+    timerDisplay.classList.remove('warning', 'danger');
+    if (challengeState.timerRemaining <= 5) {
+        timerDisplay.classList.add('danger');
+    } else if (challengeState.timerRemaining <= 10) {
+        timerDisplay.classList.add('warning');
+    }
+}
+
+function challengeTimeUp() {
+    // Auto-submit empty answer when time is up (counts as wrong)
+    const currentIdx = challengeState.currentQuestionIndex;
+    if (challengeState.userAnswers[currentIdx]) return; // Already answered
+    
+    // Disable options
+    document.querySelectorAll('#challengeOptionsContainer .option').forEach(opt => {
+        opt.style.pointerEvents = 'none';
+        opt.classList.add('disabled');
+    });
+    
+    // Show time-up feedback
+    const feedbackEl = document.getElementById('challengeFeedback');
+    const feedbackText = document.getElementById('challengeFeedbackText');
+    feedbackEl.classList.remove('hidden');
+    feedbackText.textContent = '⏱️ Süre doldu!';
+    feedbackEl.className = 'feedback wrong';
+    playSound('wrong');
+    
+    // Submit empty answer to server
+    handleChallengeAnswer(null);
+}
+
 function handleChallengePrev() {
     if (challengeState.currentQuestionIndex > 0) {
         challengeState.currentQuestionIndex--;
@@ -3951,6 +4045,7 @@ function updateLiveScoreboard(participants) {
 async function showChallengeResults() {
     showChallengeView('challenge-results');
     stopPolling();
+    stopChallengeTimer();
     
     try {
         const response = await fetch(`${window.API.URL}/rooms/${challengeState.roomCode}/results`);
@@ -3967,7 +4062,7 @@ async function showChallengeResults() {
             winnerSection.innerHTML = `
                 <div class="winner-announcement">🏆 Kazanan</div>
                 <div class="winner-name">${winner.username}</div>
-                <div class="winner-stats">${winner.total_correct} doğru / ${winner.total_wrong} yanlış (${winner.percentage}%)</div>
+                <div class="winner-stats">${winner.score || 0} puan · ${winner.total_correct} doğru / ${winner.total_wrong} yanlış (${winner.percentage}%)${winner.max_streak > 1 ? ` · 🔥${winner.max_streak} seri` : ''}</div>
             `;
         }
         
@@ -3979,9 +4074,9 @@ async function showChallengeResults() {
                 <div class="result-rank">${rankIcons[i] || (i + 1)}</div>
                 <div class="result-info">
                     <div class="result-username">${p.username}${p.is_admin ? ' 👑' : ''}</div>
-                    <div class="result-detail">${p.total_correct} doğru / ${p.total_wrong} yanlış</div>
+                    <div class="result-detail">${p.total_correct} doğru / ${p.total_wrong} yanlış${p.max_streak > 1 ? ` · 🔥${p.max_streak}` : ''}</div>
                 </div>
-                <div class="result-score">${p.percentage}%</div>
+                <div class="result-score">${p.score || 0} <small>puan</small></div>
             </div>
         `).join('');
         
