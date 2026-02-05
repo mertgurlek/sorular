@@ -133,6 +133,7 @@
             <button class="tab" data-tab="favorites">⭐ Favoriler</button>
             <button class="tab" data-tab="wrong-answers">❌ Yanlışlarım</button>
             <button class="tab" data-tab="unknown-words">📚 Bilmediğim Kelimeler</button>
+            <button class="tab" data-tab="challenge">⚔️ Yarışma</button>
             <button class="tab" data-tab="stats">📊 İstatistikler</button>
         </nav>
 
@@ -490,6 +491,227 @@
                     <p class="empty-state">Henüz işaretlenmiş kelime yok.</p>
                 </div>
                 <p class="help-text">💡 İpucu: Quiz sırasında bilmediğiniz kelimelere tıklayarak işaretleyebilirsiniz.</p>
+            </div>
+        </section>
+
+        <!-- Challenge Tab -->
+        <section id="challenge-tab" class="tab-content">
+            <!-- Challenge Menu -->
+            <div id="challenge-menu" class="card">
+                <h2>⚔️ Yarışma Modu</h2>
+                <p class="challenge-description">Arkadaşlarınla aynı anda yarış! Oda kur veya bir odaya katıl.</p>
+                
+                <div class="challenge-actions-grid">
+                    <div class="challenge-action-card" id="createRoomBtn">
+                        <span class="challenge-action-icon">🏠</span>
+                        <span class="challenge-action-title">Oda Kur</span>
+                        <span class="challenge-action-desc">Yeni bir yarışma odası oluştur</span>
+                    </div>
+                    <div class="challenge-action-card" id="joinRoomBtn">
+                        <span class="challenge-action-icon">🚪</span>
+                        <span class="challenge-action-title">Odaya Katıl</span>
+                        <span class="challenge-action-desc">Oda kodu ile katıl</span>
+                    </div>
+                </div>
+
+                <!-- Room History -->
+                <div class="challenge-history-section">
+                    <h3>📜 Geçmiş Yarışmalar</h3>
+                    <div id="challengeHistory" class="challenge-history-list">
+                        <p class="empty-state">Henüz yarışma geçmişi yok.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Create Room Form -->
+            <div id="create-room-form" class="card hidden">
+                <div class="card-header-with-back">
+                    <button id="backFromCreate" class="btn btn-secondary btn-small">← Geri</button>
+                    <h2>🏠 Oda Kur</h2>
+                </div>
+                
+                <div class="form-group">
+                    <label for="roomName">Oda Adı</label>
+                    <input type="text" id="roomName" placeholder="Yarışma odası adı..." maxlength="50">
+                </div>
+
+                <div class="form-group">
+                    <label>Yarışma Modu</label>
+                    <div class="challenge-mode-selector">
+                        <label class="challenge-mode-option">
+                            <input type="radio" name="challengeMode" value="mini-yds" checked>
+                            <div class="challenge-mode-card">
+                                <span class="mode-icon">⚡</span>
+                                <span class="mode-title">Mini YDS</span>
+                                <span class="mode-desc">~20 soru</span>
+                            </div>
+                        </label>
+                        <label class="challenge-mode-option">
+                            <input type="radio" name="challengeMode" value="orta-yds">
+                            <div class="challenge-mode-card">
+                                <span class="mode-icon">📝</span>
+                                <span class="mode-title">Orta YDS</span>
+                                <span class="mode-desc">~40 soru</span>
+                            </div>
+                        </label>
+                        <label class="challenge-mode-option">
+                            <input type="radio" name="challengeMode" value="yds">
+                            <div class="challenge-mode-card">
+                                <span class="mode-icon">🎯</span>
+                                <span class="mode-title">Tam YDS</span>
+                                <span class="mode-desc">80 soru</span>
+                            </div>
+                        </label>
+                        <label class="challenge-mode-option">
+                            <input type="radio" name="challengeMode" value="custom">
+                            <div class="challenge-mode-card">
+                                <span class="mode-icon">⚙️</span>
+                                <span class="mode-title">Özel</span>
+                                <span class="mode-desc">Kategori seç</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Custom Category Selection (hidden by default) -->
+                <div id="customCategorySection" class="form-group hidden">
+                    <label>Kategori ve Soru Sayısı</label>
+                    <div id="challengeCategoryGrid" class="challenge-category-grid">
+                        <!-- Will be populated by JS -->
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="enableLives">
+                        <span>❤️ Can Sistemi (Yanlış cevaplarda can kaybı)</span>
+                    </label>
+                </div>
+                <div id="livesCountSection" class="form-group hidden">
+                    <label for="maxLives">Toplam Can:</label>
+                    <select id="maxLives">
+                        <option value="3">3 ❤️</option>
+                        <option value="5">5 ❤️</option>
+                        <option value="10">10 ❤️</option>
+                    </select>
+                </div>
+
+                <div id="createRoomError" class="auth-error"></div>
+                <button id="submitCreateRoom" class="btn btn-primary btn-large">🚀 Oda Oluştur</button>
+            </div>
+
+            <!-- Join Room Form -->
+            <div id="join-room-form" class="card hidden">
+                <div class="card-header-with-back">
+                    <button id="backFromJoin" class="btn btn-secondary btn-small">← Geri</button>
+                    <h2>🚪 Odaya Katıl</h2>
+                </div>
+                
+                <div class="form-group">
+                    <label for="joinRoomCode">Oda Kodu</label>
+                    <input type="text" id="joinRoomCode" placeholder="6 haneli oda kodu..." maxlength="6" style="text-transform: uppercase; font-size: 1.5rem; text-align: center; letter-spacing: 0.3em;">
+                </div>
+                
+                <div id="joinRoomError" class="auth-error"></div>
+                <button id="submitJoinRoom" class="btn btn-primary btn-large">🚪 Odaya Katıl</button>
+            </div>
+
+            <!-- Room Lobby -->
+            <div id="room-lobby" class="card hidden">
+                <div class="room-lobby-header">
+                    <h2>🏠 <span id="lobbyRoomName">Oda</span></h2>
+                    <div class="room-code-display">
+                        <span class="room-code-label">Oda Kodu:</span>
+                        <span class="room-code-value" id="lobbyRoomCode">------</span>
+                        <button id="copyRoomCode" class="btn btn-icon btn-small" title="Kodu Kopyala">📋</button>
+                    </div>
+                </div>
+
+                <div class="room-info-bar">
+                    <span>📝 <span id="lobbyQuestionCount">0</span> Soru</span>
+                    <span>👥 <span id="lobbyParticipantCount">0</span> Katılımcı</span>
+                    <span id="lobbyLivesInfo" class="hidden">❤️ <span id="lobbyMaxLives">3</span> Can</span>
+                </div>
+
+                <div class="participants-section">
+                    <h3>👥 Katılımcılar</h3>
+                    <div id="participantsList" class="participants-list">
+                        <!-- Participants will be listed here -->
+                    </div>
+                </div>
+
+                <div class="lobby-actions">
+                    <button id="readyBtn" class="btn btn-success btn-large">✅ Hazırım</button>
+                    <button id="startGameBtn" class="btn btn-primary btn-large hidden">🚀 Yarışmayı Başlat</button>
+                    <button id="leaveLobbyBtn" class="btn btn-danger btn-small">🚪 Odadan Ayrıl</button>
+                </div>
+                <div id="lobbyStatus" class="lobby-status-text"></div>
+            </div>
+
+            <!-- Challenge Game Area -->
+            <div id="challenge-game" class="card hidden">
+                <div class="challenge-game-header">
+                    <div class="challenge-progress">
+                        Soru <span id="challengeCurrentQ">1</span> / <span id="challengeTotalQ">10</span>
+                    </div>
+                    <div class="challenge-score-display">
+                        <span class="correct">✓ <span id="challengeCorrect">0</span></span>
+                        <span class="wrong">✗ <span id="challengeWrong">0</span></span>
+                    </div>
+                    <div id="challengeLivesDisplay" class="challenge-lives hidden"></div>
+                </div>
+
+                <div class="progress-bar">
+                    <div id="challengeProgressFill" class="progress-fill"></div>
+                </div>
+
+                <div id="challengeQuestionContainer" class="question-container">
+                    <p id="challengeQuestionText" class="question-text"></p>
+                    <div id="challengeOptionsContainer" class="options-container"></div>
+                </div>
+
+                <div id="challengeFeedback" class="feedback hidden">
+                    <p id="challengeFeedbackText"></p>
+                </div>
+
+                <!-- Live Scoreboard -->
+                <div class="challenge-scoreboard">
+                    <h4>📊 Skor Tablosu</h4>
+                    <div id="liveScoreboard" class="live-scoreboard">
+                        <!-- Updated in real-time -->
+                    </div>
+                </div>
+
+                <div class="challenge-game-actions">
+                    <button id="challengeNextBtn" class="btn btn-primary hidden">Sonraki Soru →</button>
+                </div>
+            </div>
+
+            <!-- Challenge Results -->
+            <div id="challenge-results" class="card hidden">
+                <h2>🏆 Yarışma Sonuçları</h2>
+                
+                <div id="challengeWinnerSection" class="challenge-winner-section">
+                    <!-- Winner announcement -->
+                </div>
+
+                <div class="challenge-results-table">
+                    <h3>📊 Sıralama</h3>
+                    <div id="challengeResultsList" class="challenge-results-list">
+                        <!-- Results will be listed here -->
+                    </div>
+                </div>
+
+                <div class="challenge-category-stats">
+                    <h3>📈 Kategori Bazlı Sonuçlar</h3>
+                    <div id="challengeCategoryStats" class="category-stats">
+                        <!-- Category stats -->
+                    </div>
+                </div>
+
+                <div class="challenge-result-actions">
+                    <button id="backToChallenge" class="btn btn-primary btn-large">⚔️ Yeni Yarışma</button>
+                </div>
             </div>
         </section>
 

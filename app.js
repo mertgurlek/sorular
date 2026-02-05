@@ -545,6 +545,7 @@ function switchTab(tabName) {
     if (tabName === 'unknown-words') renderUnknownWords();
     if (tabName === 'flashcards') initFlashcards();
     if (tabName === 'favorites') renderFavorites();
+    if (tabName === 'challenge') loadChallengeHistory();
 }
 
 // Quiz Functions
@@ -3108,3 +3109,717 @@ window.closeGPTModal = closeGPTModal;
 window.openGPTPanel = openGPTPanel;
 window.closeGPTPanel = closeGPTPanel;
 window.toggleGPTPanel = toggleGPTPanel;
+
+// ==================== CHALLENGE MODE ====================
+let challengeState = {
+    roomCode: null,
+    roomData: null,
+    isAdmin: false,
+    username: null,
+    isReady: false,
+    pollInterval: null,
+    currentQuestionIndex: 0,
+    correctCount: 0,
+    wrongCount: 0,
+    answerStartTime: null,
+    lives: 3,
+    isEliminated: false
+};
+
+function initChallenge() {
+    // Menu buttons
+    document.getElementById('createRoomBtn').addEventListener('click', showCreateRoomForm);
+    document.getElementById('joinRoomBtn').addEventListener('click', showJoinRoomForm);
+    
+    // Create room
+    document.getElementById('backFromCreate').addEventListener('click', showChallengeMenu);
+    document.getElementById('submitCreateRoom').addEventListener('click', handleCreateRoom);
+    
+    // Join room
+    document.getElementById('backFromJoin').addEventListener('click', showChallengeMenu);
+    document.getElementById('submitJoinRoom').addEventListener('click', handleJoinRoom);
+    document.getElementById('joinRoomCode').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') handleJoinRoom();
+    });
+    
+    // Lobby
+    document.getElementById('readyBtn').addEventListener('click', handleToggleReady);
+    document.getElementById('startGameBtn').addEventListener('click', handleStartGame);
+    document.getElementById('leaveLobbyBtn').addEventListener('click', handleLeaveRoom);
+    document.getElementById('copyRoomCode').addEventListener('click', handleCopyRoomCode);
+    
+    // Game
+    document.getElementById('challengeNextBtn').addEventListener('click', handleChallengeNext);
+    
+    // Results
+    document.getElementById('backToChallenge').addEventListener('click', () => {
+        stopPolling();
+        showChallengeMenu();
+    });
+    
+    // Mode selector - show/hide custom categories
+    document.querySelectorAll('input[name="challengeMode"]').forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            const customSection = document.getElementById('customCategorySection');
+            if (e.target.value === 'custom') {
+                customSection.classList.remove('hidden');
+                loadChallengeCategoryGrid();
+            } else {
+                customSection.classList.add('hidden');
+            }
+        });
+    });
+    
+    // Lives checkbox
+    document.getElementById('enableLives').addEventListener('change', (e) => {
+        document.getElementById('livesCountSection').classList.toggle('hidden', !e.target.checked);
+    });
+    
+    // Load history when tab is opened
+    loadChallengeHistory();
+}
+
+function getChallengeUsername() {
+    if (currentUser && currentUser.username) return currentUser.username;
+    return 'Misafir_' + Math.random().toString(36).substring(2, 6);
+}
+
+function showChallengeView(viewId) {
+    const views = ['challenge-menu', 'create-room-form', 'join-room-form', 'room-lobby', 'challenge-game', 'challenge-results'];
+    views.forEach(id => {
+        document.getElementById(id).classList.toggle('hidden', id !== viewId);
+    });
+}
+
+function showChallengeMenu() {
+    stopPolling();
+    showChallengeView('challenge-menu');
+    loadChallengeHistory();
+}
+
+function showCreateRoomForm() {
+    showChallengeView('create-room-form');
+    document.getElementById('createRoomError').textContent = '';
+    document.getElementById('roomName').value = '';
+}
+
+function showJoinRoomForm() {
+    showChallengeView('join-room-form');
+    document.getElementById('joinRoomError').textContent = '';
+    document.getElementById('joinRoomCode').value = '';
+}
+
+async function loadChallengeCategoryGrid() {
+    const grid = document.getElementById('challengeCategoryGrid');
+    try {
+        const data = await window.API.Questions.getCategories();
+        const categories = data.categories || [];
+        grid.innerHTML = categories.map(cat => `
+            <div class="challenge-category-item">
+                <label>${cat.category}</label>
+                <input type="number" min="0" max="50" value="5" data-category="${cat.category}">
+            </div>
+        `).join('');
+    } catch (error) {
+        grid.innerHTML = '<p>Kategoriler yüklenemedi.</p>';
+    }
+}
+
+async function handleCreateRoom() {
+    const errorEl = document.getElementById('createRoomError');
+    errorEl.textContent = '';
+    
+    const username = getChallengeUsername();
+    const name = document.getElementById('roomName').value.trim() || `${username}'in Odası`;
+    const mode = document.querySelector('input[name="challengeMode"]:checked').value;
+    const enableLives = document.getElementById('enableLives').checked;
+    const maxLives = parseInt(document.getElementById('maxLives').value);
+    
+    let body = {
+        name,
+        adminId: currentUser?.id || null,
+        adminName: username,
+        mode,
+        enableLives,
+        maxLives
+    };
+    
+    if (mode === 'custom') {
+        const categoryInputs = document.querySelectorAll('#challengeCategoryGrid input[type="number"]');
+        const categoryQuestions = {};
+        categoryInputs.forEach(input => {
+            const count = parseInt(input.value) || 0;
+            if (count > 0) {
+                categoryQuestions[input.dataset.category] = count;
+            }
+        });
+        if (Object.keys(categoryQuestions).length === 0) {
+            errorEl.textContent = 'En az bir kategori seçmelisiniz';
+            return;
+        }
+        body.categoryQuestions = categoryQuestions;
+    }
+    
+    try {
+        const response = await fetch(`${window.API.URL}/rooms/create`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        const data = await response.json();
+        
+        if (!data.success) {
+            errorEl.textContent = data.error || 'Oda oluşturulamadı';
+            return;
+        }
+        
+        challengeState.roomCode = data.room.room_code;
+        challengeState.roomData = data.room;
+        challengeState.isAdmin = true;
+        challengeState.username = username;
+        challengeState.isReady = true;
+        challengeState.correctCount = 0;
+        challengeState.wrongCount = 0;
+        
+        showLobby();
+    } catch (error) {
+        console.error('Create room error:', error);
+        errorEl.textContent = 'Sunucuya bağlanılamadı';
+    }
+}
+
+async function handleJoinRoom() {
+    const errorEl = document.getElementById('joinRoomError');
+    errorEl.textContent = '';
+    
+    const roomCode = document.getElementById('joinRoomCode').value.trim().toUpperCase();
+    if (!roomCode || roomCode.length < 4) {
+        errorEl.textContent = 'Geçerli bir oda kodu girin';
+        return;
+    }
+    
+    const username = getChallengeUsername();
+    
+    try {
+        const response = await fetch(`${window.API.URL}/rooms/join`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                roomCode,
+                userId: currentUser?.id || null,
+                username
+            })
+        });
+        const data = await response.json();
+        
+        if (!data.success) {
+            errorEl.textContent = data.error || 'Odaya katılınamadı';
+            return;
+        }
+        
+        challengeState.roomCode = data.room.room_code;
+        challengeState.roomData = data.room;
+        challengeState.isAdmin = data.participant.is_admin;
+        challengeState.username = username;
+        challengeState.isReady = data.participant.is_ready;
+        challengeState.correctCount = 0;
+        challengeState.wrongCount = 0;
+        
+        showLobby();
+    } catch (error) {
+        console.error('Join room error:', error);
+        errorEl.textContent = 'Sunucuya bağlanılamadı';
+    }
+}
+
+function showLobby() {
+    showChallengeView('room-lobby');
+    
+    document.getElementById('lobbyRoomName').textContent = challengeState.roomData.name;
+    document.getElementById('lobbyRoomCode').textContent = challengeState.roomCode;
+    document.getElementById('lobbyQuestionCount').textContent = challengeState.roomData.question_count || challengeState.roomData.actualQuestionCount || '?';
+    
+    if (challengeState.roomData.enable_lives) {
+        document.getElementById('lobbyLivesInfo').classList.remove('hidden');
+        document.getElementById('lobbyMaxLives').textContent = challengeState.roomData.max_lives;
+    }
+    
+    // Show/hide admin controls
+    const startBtn = document.getElementById('startGameBtn');
+    startBtn.classList.toggle('hidden', !challengeState.isAdmin);
+    
+    // Update ready button state
+    updateReadyButton();
+    
+    // Start polling for room state
+    startPolling();
+}
+
+function updateReadyButton() {
+    const readyBtn = document.getElementById('readyBtn');
+    if (challengeState.isReady) {
+        readyBtn.textContent = '❌ Hazır Değilim';
+        readyBtn.className = 'btn btn-danger btn-large';
+    } else {
+        readyBtn.textContent = '✅ Hazırım';
+        readyBtn.className = 'btn btn-success btn-large';
+    }
+}
+
+async function handleToggleReady() {
+    challengeState.isReady = !challengeState.isReady;
+    updateReadyButton();
+    
+    try {
+        await fetch(`${window.API.URL}/rooms/ready`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                roomCode: challengeState.roomCode,
+                username: challengeState.username,
+                isReady: challengeState.isReady
+            })
+        });
+    } catch (error) {
+        console.error('Toggle ready error:', error);
+    }
+}
+
+async function handleStartGame() {
+    try {
+        const response = await fetch(`${window.API.URL}/rooms/start`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                roomCode: challengeState.roomCode,
+                adminName: challengeState.username
+            })
+        });
+        const data = await response.json();
+        
+        if (!data.success) {
+            document.getElementById('lobbyStatus').textContent = data.error || 'Başlatılamadı';
+            return;
+        }
+    } catch (error) {
+        console.error('Start game error:', error);
+        document.getElementById('lobbyStatus').textContent = 'Sunucu hatası';
+    }
+}
+
+async function handleLeaveRoom() {
+    stopPolling();
+    try {
+        await fetch(`${window.API.URL}/rooms/leave`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                roomCode: challengeState.roomCode,
+                username: challengeState.username
+            })
+        });
+    } catch (error) {
+        console.error('Leave room error:', error);
+    }
+    showChallengeMenu();
+}
+
+function handleCopyRoomCode() {
+    navigator.clipboard.writeText(challengeState.roomCode).then(() => {
+        const btn = document.getElementById('copyRoomCode');
+        btn.textContent = '✅';
+        setTimeout(() => { btn.textContent = '📋'; }, 2000);
+    }).catch(() => {
+        // Fallback
+        const input = document.createElement('input');
+        input.value = challengeState.roomCode;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand('copy');
+        document.body.removeChild(input);
+    });
+}
+
+// Polling
+function startPolling() {
+    stopPolling();
+    pollRoomState();
+    challengeState.pollInterval = setInterval(pollRoomState, 2000);
+}
+
+function stopPolling() {
+    if (challengeState.pollInterval) {
+        clearInterval(challengeState.pollInterval);
+        challengeState.pollInterval = null;
+    }
+}
+
+async function pollRoomState() {
+    if (!challengeState.roomCode) return;
+    
+    try {
+        const response = await fetch(`${window.API.URL}/rooms/${challengeState.roomCode}?username=${encodeURIComponent(challengeState.username)}`);
+        const data = await response.json();
+        
+        if (!data.success) return;
+        
+        const room = data.room;
+        const participants = data.participants;
+        
+        challengeState.roomData = room;
+        
+        // Update participant count
+        const countEl = document.getElementById('lobbyParticipantCount');
+        if (countEl) countEl.textContent = participants.length;
+        
+        // Check room status transitions
+        if (room.status === 'active') {
+            const gameArea = document.getElementById('challenge-game');
+            if (gameArea.classList.contains('hidden')) {
+                // Game just started - transition to game view
+                startChallengeGame(data);
+            } else {
+                // Game already running - update scoreboard
+                updateLiveScoreboard(participants);
+                
+                // Check if question index changed (admin advanced)
+                if (room.current_question_index !== challengeState.currentQuestionIndex) {
+                    challengeState.currentQuestionIndex = room.current_question_index;
+                    displayChallengeQuestion(data);
+                }
+            }
+        } else if (room.status === 'finished') {
+            stopPolling();
+            showChallengeResults();
+            return;
+        } else if (room.status === 'waiting') {
+            // Update lobby participants list
+            updateParticipantsList(participants);
+        }
+    } catch (error) {
+        console.error('Poll error:', error);
+    }
+}
+
+function updateParticipantsList(participants) {
+    const list = document.getElementById('participantsList');
+    if (!list) return;
+    
+    list.innerHTML = participants.map(p => `
+        <div class="participant-item ${p.is_admin ? 'is-admin' : ''}">
+            <div class="participant-name">
+                ${p.username}
+                ${p.is_admin ? '<span class="participant-badge">Admin</span>' : ''}
+            </div>
+            <div class="participant-status ${p.is_ready ? 'ready' : 'waiting'}">
+                ${p.is_ready ? '✅ Hazır' : '⏳ Bekliyor'}
+            </div>
+        </div>
+    `).join('');
+    
+    // Update status text
+    const readyCount = participants.filter(p => p.is_ready).length;
+    const statusEl = document.getElementById('lobbyStatus');
+    statusEl.textContent = `${readyCount}/${participants.length} katılımcı hazır`;
+    
+    // Enable start button if admin and all ready
+    if (challengeState.isAdmin) {
+        const startBtn = document.getElementById('startGameBtn');
+        const allReady = participants.every(p => p.is_ready);
+        startBtn.disabled = !allReady || participants.length < 1;
+        startBtn.classList.remove('hidden');
+    }
+}
+
+function startChallengeGame(data) {
+    showChallengeView('challenge-game');
+    challengeState.currentQuestionIndex = data.room.current_question_index;
+    challengeState.correctCount = 0;
+    challengeState.wrongCount = 0;
+    challengeState.lives = data.room.max_lives || 3;
+    challengeState.isEliminated = false;
+    
+    document.getElementById('challengeTotalQ').textContent = data.room.totalQuestions || data.room.question_count;
+    document.getElementById('challengeCorrect').textContent = '0';
+    document.getElementById('challengeWrong').textContent = '0';
+    
+    // Lives display
+    if (data.room.enable_lives) {
+        const livesDisplay = document.getElementById('challengeLivesDisplay');
+        livesDisplay.classList.remove('hidden');
+        updateLivesDisplay();
+    }
+    
+    displayChallengeQuestion(data);
+    updateLiveScoreboard(data.participants);
+}
+
+function displayChallengeQuestion(data) {
+    const question = data.currentQuestion;
+    if (!question) return;
+    
+    const totalQ = data.room.totalQuestions || data.room.question_count;
+    document.getElementById('challengeCurrentQ').textContent = challengeState.currentQuestionIndex + 1;
+    document.getElementById('challengeTotalQ').textContent = totalQ;
+    
+    // Progress bar
+    const progress = ((challengeState.currentQuestionIndex) / totalQ) * 100;
+    document.getElementById('challengeProgressFill').style.width = `${progress}%`;
+    
+    // Question text
+    document.getElementById('challengeQuestionText').textContent = question.question_text;
+    
+    // Options
+    const optionsContainer = document.getElementById('challengeOptionsContainer');
+    const options = question.options;
+    
+    optionsContainer.innerHTML = Object.entries(options).map(([key, value]) => `
+        <button class="option" data-answer="${key}" onclick="handleChallengeAnswer('${key}')">
+            <span class="option-letter">${key}</span>
+            <span class="option-text">${value}</span>
+        </button>
+    `).join('');
+    
+    // Hide feedback and next button
+    document.getElementById('challengeFeedback').classList.add('hidden');
+    document.getElementById('challengeNextBtn').classList.add('hidden');
+    
+    // Start answer timer
+    challengeState.answerStartTime = Date.now();
+}
+
+async function handleChallengeAnswer(answer) {
+    const answerTimeMs = Date.now() - challengeState.answerStartTime;
+    
+    // Disable all options
+    document.querySelectorAll('#challengeOptionsContainer .option').forEach(btn => {
+        btn.disabled = true;
+        btn.style.pointerEvents = 'none';
+    });
+    
+    try {
+        const response = await fetch(`${window.API.URL}/rooms/answer`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                roomCode: challengeState.roomCode,
+                username: challengeState.username,
+                questionIndex: challengeState.currentQuestionIndex,
+                answer,
+                answerTimeMs
+            })
+        });
+        const data = await response.json();
+        
+        if (!data.success) {
+            console.error('Answer error:', data.error);
+            return;
+        }
+        
+        // Show feedback
+        const feedbackEl = document.getElementById('challengeFeedback');
+        const feedbackText = document.getElementById('challengeFeedbackText');
+        feedbackEl.classList.remove('hidden');
+        
+        // Highlight correct/wrong options
+        document.querySelectorAll('#challengeOptionsContainer .option').forEach(btn => {
+            const btnAnswer = btn.dataset.answer;
+            if (btnAnswer === data.correctAnswer) {
+                btn.classList.add('correct');
+            }
+            if (btnAnswer === answer && !data.isCorrect) {
+                btn.classList.add('wrong');
+            }
+        });
+        
+        if (data.isCorrect) {
+            challengeState.correctCount++;
+            feedbackText.textContent = `✅ Doğru! +${data.pointsEarned} puan${data.newStreak > 1 ? ` (${data.newStreak} seri!)` : ''}`;
+            feedbackEl.className = 'feedback correct';
+        } else {
+            challengeState.wrongCount++;
+            feedbackText.textContent = `❌ Yanlış! Doğru cevap: ${data.correctAnswer}`;
+            feedbackEl.className = 'feedback wrong';
+            
+            if (data.isEliminated) {
+                feedbackText.textContent += ' - Elendiniz!';
+                challengeState.isEliminated = true;
+            }
+        }
+        
+        document.getElementById('challengeCorrect').textContent = challengeState.correctCount;
+        document.getElementById('challengeWrong').textContent = challengeState.wrongCount;
+        
+        // Update lives
+        if (challengeState.roomData.enable_lives) {
+            challengeState.lives = data.newLives;
+            updateLivesDisplay();
+        }
+        
+        // Show next button (admin only) or wait for admin
+        if (challengeState.isAdmin) {
+            document.getElementById('challengeNextBtn').classList.remove('hidden');
+        }
+        
+    } catch (error) {
+        console.error('Submit answer error:', error);
+    }
+}
+
+function updateLivesDisplay() {
+    const display = document.getElementById('challengeLivesDisplay');
+    let hearts = '';
+    for (let i = 0; i < challengeState.lives; i++) hearts += '❤️';
+    for (let i = challengeState.lives; i < (challengeState.roomData.max_lives || 3); i++) hearts += '🖤';
+    display.innerHTML = hearts;
+}
+
+async function handleChallengeNext() {
+    try {
+        const response = await fetch(`${window.API.URL}/rooms/next`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                roomCode: challengeState.roomCode,
+                adminName: challengeState.username
+            })
+        });
+        const data = await response.json();
+        
+        if (data.finished) {
+            stopPolling();
+            showChallengeResults();
+        }
+        // Otherwise, polling will pick up the new question
+    } catch (error) {
+        console.error('Next question error:', error);
+    }
+}
+
+function updateLiveScoreboard(participants) {
+    const scoreboard = document.getElementById('liveScoreboard');
+    if (!scoreboard) return;
+    
+    const sorted = [...participants].sort((a, b) => {
+        const scoreA = (a.score || 0) || (a.total_correct || 0);
+        const scoreB = (b.score || 0) || (b.total_correct || 0);
+        return scoreB - scoreA;
+    });
+    
+    scoreboard.innerHTML = sorted.map((p, i) => {
+        const isMe = p.username === challengeState.username;
+        const score = p.score || p.total_correct || 0;
+        return `
+            <div class="scoreboard-item ${isMe ? 'current-user' : ''}">
+                <span class="scoreboard-rank">${i + 1}</span>
+                <span class="scoreboard-name">${p.username}${p.is_admin ? ' 👑' : ''}</span>
+                <span class="scoreboard-score">${score}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+async function showChallengeResults() {
+    showChallengeView('challenge-results');
+    stopPolling();
+    
+    try {
+        const response = await fetch(`${window.API.URL}/rooms/${challengeState.roomCode}/results`);
+        const data = await response.json();
+        
+        if (!data.success) return;
+        
+        const participants = data.participants;
+        
+        // Winner section
+        const winnerSection = document.getElementById('challengeWinnerSection');
+        if (participants.length > 0) {
+            const winner = participants[0];
+            winnerSection.innerHTML = `
+                <div class="winner-announcement">🏆 Kazanan</div>
+                <div class="winner-name">${winner.username}</div>
+                <div class="winner-stats">${winner.total_correct} doğru / ${winner.total_wrong} yanlış (${winner.percentage}%)</div>
+            `;
+        }
+        
+        // Results list
+        const resultsList = document.getElementById('challengeResultsList');
+        const rankIcons = ['🥇', '🥈', '🥉'];
+        resultsList.innerHTML = participants.map((p, i) => `
+            <div class="result-row ${i < 3 ? 'rank-' + (i + 1) : ''}">
+                <div class="result-rank">${rankIcons[i] || (i + 1)}</div>
+                <div class="result-info">
+                    <div class="result-username">${p.username}${p.is_admin ? ' 👑' : ''}</div>
+                    <div class="result-detail">${p.total_correct} doğru / ${p.total_wrong} yanlış</div>
+                </div>
+                <div class="result-score">${p.percentage}%</div>
+            </div>
+        `).join('');
+        
+        // Category stats
+        if (data.categoryStats && data.categoryStats[challengeState.username]) {
+            const myStats = data.categoryStats[challengeState.username];
+            const categoryStatsEl = document.getElementById('challengeCategoryStats');
+            categoryStatsEl.innerHTML = Object.entries(myStats).map(([cat, stats]) => {
+                const pct = stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0;
+                return `
+                    <div class="category-stat-item">
+                        <span class="cat-name">${cat}</span>
+                        <span class="cat-score">${stats.correct}/${stats.total} (${pct}%)</span>
+                    </div>
+                `;
+            }).join('');
+        }
+    } catch (error) {
+        console.error('Results error:', error);
+    }
+}
+
+async function loadChallengeHistory() {
+    const username = getChallengeUsername();
+    const historyEl = document.getElementById('challengeHistory');
+    
+    if (!currentUser) {
+        historyEl.innerHTML = '<p class="empty-state">Geçmişi görmek için giriş yapın.</p>';
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${window.API.URL}/rooms/history/${encodeURIComponent(username)}`);
+        const data = await response.json();
+        
+        if (!data.success || !data.rooms || data.rooms.length === 0) {
+            historyEl.innerHTML = '<p class="empty-state">Henüz yarışma geçmişi yok.</p>';
+            return;
+        }
+        
+        historyEl.innerHTML = data.rooms.map(room => {
+            const date = new Date(room.created_at).toLocaleDateString('tr-TR');
+            const total = room.total_correct + room.total_wrong;
+            const pct = total > 0 ? Math.round((room.total_correct / total) * 100) : 0;
+            return `
+                <div class="challenge-history-item">
+                    <div>
+                        <div class="room-name">${room.name}</div>
+                        <div class="room-info">
+                            <span>${date}</span>
+                            <span>👥 ${room.participant_count}</span>
+                        </div>
+                    </div>
+                    <div class="room-result">${room.total_correct}/${total} (${pct}%)</div>
+                </div>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('History error:', error);
+        historyEl.innerHTML = '<p class="empty-state">Geçmiş yüklenemedi.</p>';
+    }
+}
+
+// Make challenge answer handler globally accessible
+window.handleChallengeAnswer = handleChallengeAnswer;
+
+// Initialize challenge when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    initChallenge();
+});
