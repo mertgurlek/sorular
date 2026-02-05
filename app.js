@@ -184,7 +184,8 @@ let currentQuiz = {
     selectedCategory: null,
     timerLimit: 0,
     timerRemaining: 0,
-    timerInterval: null
+    timerInterval: null,
+    userAnswers: []
 };
 
 // OpenAI API Configuration - use from window.Constants (loaded from src/utils/constants.js)
@@ -517,6 +518,7 @@ function initEventListeners() {
     // Quiz controls
     document.getElementById('startQuiz').addEventListener('click', startQuiz);
     document.getElementById('exitQuiz').addEventListener('click', exitQuiz);
+    document.getElementById('prevQuestion').addEventListener('click', prevQuestion);
     document.getElementById('nextQuestion').addEventListener('click', nextQuestion);
     document.getElementById('restartQuiz').addEventListener('click', restartQuiz);
 
@@ -582,6 +584,7 @@ function startQuiz() {
     currentQuiz.wrong = 0;
     currentQuiz.timerLimit = timerLimit;
     currentQuiz.timerRemaining = timerLimit;
+    currentQuiz.userAnswers = new Array(questions.slice(0, count).length).fill(null);
 
     // Setup timer display
     const timerDisplay = document.getElementById('timerDisplay');
@@ -690,9 +693,59 @@ function showQuestion() {
         optionsContainer.appendChild(optionDiv);
     });
 
-    // Reset feedback and next button
-    document.getElementById('feedback').classList.add('hidden');
-    document.getElementById('nextQuestion').classList.add('hidden');
+    // Show/hide prev button
+    const prevBtn = document.getElementById('prevQuestion');
+    if (currentQuiz.currentIndex > 0) {
+        prevBtn.classList.remove('hidden');
+    } else {
+        prevBtn.classList.add('hidden');
+    }
+
+    // Check if this question was already answered (revisiting)
+    const previousAnswer = currentQuiz.userAnswers[currentQuiz.currentIndex];
+    if (previousAnswer) {
+        // Show the previous answer state - disable options and highlight
+        document.querySelectorAll('#optionsContainer .option').forEach(opt => {
+            opt.classList.add('disabled');
+            const btn = opt.querySelector('.option-select-btn');
+            if (btn) btn.disabled = true;
+            
+            if (opt.dataset.letter === q.correct_answer) {
+                opt.classList.add('correct');
+            }
+            if (opt.dataset.letter === previousAnswer.letter && !previousAnswer.isCorrect) {
+                opt.classList.add('wrong');
+            }
+            if (opt.dataset.letter === previousAnswer.letter && previousAnswer.isCorrect) {
+                opt.classList.add('correct');
+            }
+        });
+        
+        // Show feedback for previously answered question
+        const feedback = document.getElementById('feedback');
+        feedback.classList.remove('hidden', 'correct', 'wrong');
+        if (previousAnswer.isCorrect) {
+            feedback.classList.add('correct');
+            feedback.innerHTML = `<p id="feedbackText">✓ Doğru!</p>`;
+        } else {
+            feedback.classList.add('wrong');
+            feedback.innerHTML = `<p id="feedbackText">✗ Yanlış! Doğru cevap: ${q.correct_answer}</p>`;
+        }
+        
+        // Show next button if not last question
+        if (currentQuiz.currentIndex < currentQuiz.questions.length - 1) {
+            document.getElementById('nextQuestion').classList.remove('hidden');
+        } else {
+            document.getElementById('nextQuestion').classList.add('hidden');
+        }
+    } else {
+        // Reset feedback and next button for unanswered question
+        document.getElementById('feedback').classList.add('hidden');
+        document.getElementById('nextQuestion').classList.add('hidden');
+        
+        // Start timer if enabled
+        startTimer();
+    }
 
     // Add click listeners to words
     addWordClickListeners();
@@ -707,9 +760,6 @@ function showQuestion() {
     
     // Setup hint button
     setupHintButton(q);
-    
-    // Start timer if enabled
-    startTimer();
 }
 
 // ==================== HINT SYSTEM ====================
@@ -997,6 +1047,9 @@ function selectAnswer(letter) {
         // }
     }
 
+    // Store user's answer for this question
+    currentQuiz.userAnswers[currentQuiz.currentIndex] = { letter, isCorrect };
+
     // Save answer history
     saveAnswerHistory(q, letter, isCorrect);
 
@@ -1010,6 +1063,14 @@ function selectAnswer(letter) {
         document.getElementById('nextQuestion').classList.remove('hidden');
     } else {
         setTimeout(showResults, 1000);
+    }
+}
+
+function prevQuestion() {
+    if (currentQuiz.currentIndex > 0) {
+        stopTimer();
+        currentQuiz.currentIndex--;
+        showQuestion();
     }
 }
 
@@ -3123,7 +3184,9 @@ let challengeState = {
     wrongCount: 0,
     answerStartTime: null,
     lives: 3,
-    isEliminated: false
+    isEliminated: false,
+    userAnswers: {},
+    questionCache: {}
 };
 
 function initChallenge() {
@@ -3149,6 +3212,7 @@ function initChallenge() {
     document.getElementById('copyRoomCode').addEventListener('click', handleCopyRoomCode);
     
     // Game
+    document.getElementById('challengePrevBtn').addEventListener('click', handleChallengePrev);
     document.getElementById('challengeNextBtn').addEventListener('click', handleChallengeNext);
     
     // Results
@@ -3485,7 +3549,15 @@ async function pollRoomState() {
                 // Game already running - update scoreboard
                 updateLiveScoreboard(participants);
                 
-                // Check if question index changed (admin advanced)
+                // Update answer status indicator
+                updateAnswerStatus(data.answeredCount, data.activeParticipantCount, data.allAnswered);
+                
+                // Show next button for admin only when all answered
+                if (challengeState.isAdmin && data.allAnswered && challengeState.userAnswers[room.current_question_index]) {
+                    document.getElementById('challengeNextBtn').classList.remove('hidden');
+                }
+                
+                // Check if question index changed (server advanced)
                 if (room.current_question_index !== challengeState.currentQuestionIndex) {
                     challengeState.currentQuestionIndex = room.current_question_index;
                     displayChallengeQuestion(data);
@@ -3539,6 +3611,8 @@ function startChallengeGame(data) {
     challengeState.currentQuestionIndex = data.room.current_question_index;
     challengeState.correctCount = 0;
     challengeState.wrongCount = 0;
+    challengeState.userAnswers = {};
+    challengeState.questionCache = {};
     challengeState.lives = data.room.max_lives || 3;
     challengeState.isEliminated = false;
     
@@ -3561,7 +3635,14 @@ function displayChallengeQuestion(data) {
     const question = data.currentQuestion;
     if (!question) return;
     
-    const totalQ = data.room.totalQuestions || data.room.question_count;
+    // Cache this question data for revisiting
+    challengeState.questionCache[challengeState.currentQuestionIndex] = question;
+    
+    renderChallengeQuestion(question, data.room);
+}
+
+function renderChallengeQuestion(question, room) {
+    const totalQ = room.totalQuestions || room.question_count;
     document.getElementById('challengeCurrentQ').textContent = challengeState.currentQuestionIndex + 1;
     document.getElementById('challengeTotalQ').textContent = totalQ;
     
@@ -3616,17 +3697,66 @@ function displayChallengeQuestion(data) {
         optionsContainer.appendChild(optionDiv);
     });
     
-    // Hide feedback and next button
-    document.getElementById('challengeFeedback').classList.add('hidden');
-    document.getElementById('challengeNextBtn').classList.add('hidden');
+    // Show/hide prev button
+    const prevBtn = document.getElementById('challengePrevBtn');
+    if (challengeState.currentQuestionIndex > 0) {
+        prevBtn.classList.remove('hidden');
+    } else {
+        prevBtn.classList.add('hidden');
+    }
+    
+    // Check if this question was already answered (revisiting)
+    const prevAnswer = challengeState.userAnswers[challengeState.currentQuestionIndex];
+    if (prevAnswer) {
+        // Show previous answer - disable options and highlight
+        document.querySelectorAll('#challengeOptionsContainer .option').forEach(opt => {
+            opt.style.pointerEvents = 'none';
+            opt.classList.add('disabled');
+            
+            if (opt.dataset.letter === prevAnswer.correctAnswer) {
+                opt.classList.add('correct');
+            }
+            if (opt.dataset.letter === prevAnswer.letter && !prevAnswer.isCorrect) {
+                opt.classList.add('wrong');
+            }
+        });
+        
+        // Show feedback
+        const feedbackEl = document.getElementById('challengeFeedback');
+        const feedbackText = document.getElementById('challengeFeedbackText');
+        feedbackEl.classList.remove('hidden');
+        if (prevAnswer.isCorrect) {
+            feedbackText.textContent = `✅ Doğru! +${prevAnswer.pointsEarned || 0} puan`;
+            feedbackEl.className = 'feedback correct';
+        } else {
+            feedbackText.textContent = `❌ Yanlış! Doğru cevap: ${prevAnswer.correctAnswer}`;
+            feedbackEl.className = 'feedback wrong';
+        }
+        
+        // Show next button if admin and not viewing the latest question
+        if (challengeState.isAdmin && challengeState.currentQuestionIndex === room.current_question_index) {
+            document.getElementById('challengeNextBtn').classList.remove('hidden');
+        } else {
+            document.getElementById('challengeNextBtn').classList.add('hidden');
+        }
+        // Always show next to go forward to already-seen questions
+        if (challengeState.currentQuestionIndex < room.current_question_index) {
+            document.getElementById('challengeNextBtn').classList.remove('hidden');
+        }
+    } else {
+        // Hide feedback, next button, and answer status for unanswered question
+        document.getElementById('challengeFeedback').classList.add('hidden');
+        document.getElementById('challengeNextBtn').classList.add('hidden');
+        document.getElementById('challengeAnswerStatus').classList.add('hidden');
+        
+        // Start answer timer
+        challengeState.answerStartTime = Date.now();
+    }
     
     // Add click listeners to words
     if (typeof addWordClickListeners === 'function') {
         addWordClickListeners();
     }
-    
-    // Start answer timer
-    challengeState.answerStartTime = Date.now();
 }
 
 async function handleChallengeAnswer(answer) {
@@ -3677,10 +3807,12 @@ async function handleChallengeAnswer(answer) {
             challengeState.correctCount++;
             feedbackText.textContent = `✅ Doğru! +${data.pointsEarned} puan${data.newStreak > 1 ? ` (${data.newStreak} seri!)` : ''}`;
             feedbackEl.className = 'feedback correct';
+            playSound('correct');
         } else {
             challengeState.wrongCount++;
             feedbackText.textContent = `❌ Yanlış! Doğru cevap: ${data.correctAnswer}`;
             feedbackEl.className = 'feedback wrong';
+            playSound('wrong');
             
             if (data.isEliminated) {
                 feedbackText.textContent += ' - Elendiniz!';
@@ -3697,13 +3829,45 @@ async function handleChallengeAnswer(answer) {
             updateLivesDisplay();
         }
         
-        // Show next button (admin only) or wait for admin
-        if (challengeState.isAdmin) {
-            document.getElementById('challengeNextBtn').classList.remove('hidden');
-        }
+        // Store user's answer for revisiting
+        challengeState.userAnswers[challengeState.currentQuestionIndex] = {
+            letter: answer,
+            isCorrect: data.isCorrect,
+            correctAnswer: data.correctAnswer,
+            pointsEarned: data.pointsEarned || 0
+        };
+        
+        // Show answer status - waiting for others
+        const statusEl = document.getElementById('challengeAnswerStatus');
+        statusEl.classList.remove('hidden', 'all-answered');
+        document.getElementById('answerStatusText').textContent = '⏳ Diğer katılımcılar bekleniyor...';
+        
+        // Next button will be shown by polling when allAnswered is true
+        document.getElementById('challengeNextBtn').classList.add('hidden');
         
     } catch (error) {
         console.error('Submit answer error:', error);
+    }
+}
+
+function updateAnswerStatus(answeredCount, activeCount, allAnswered) {
+    const statusEl = document.getElementById('challengeAnswerStatus');
+    const statusText = document.getElementById('answerStatusText');
+    
+    // Only show when user has answered the current question
+    if (!challengeState.userAnswers[challengeState.roomData.current_question_index]) {
+        statusEl.classList.add('hidden');
+        return;
+    }
+    
+    statusEl.classList.remove('hidden');
+    
+    if (allAnswered) {
+        statusEl.classList.add('all-answered');
+        statusText.textContent = `✅ Tüm katılımcılar cevapladı (${answeredCount}/${activeCount})`;
+    } else {
+        statusEl.classList.remove('all-answered');
+        statusText.textContent = `⏳ ${answeredCount}/${activeCount} katılımcı cevapladı`;
     }
 }
 
@@ -3715,7 +3879,31 @@ function updateLivesDisplay() {
     display.innerHTML = hearts;
 }
 
+function handleChallengePrev() {
+    if (challengeState.currentQuestionIndex > 0) {
+        challengeState.currentQuestionIndex--;
+        const cachedQuestion = challengeState.questionCache[challengeState.currentQuestionIndex];
+        if (cachedQuestion) {
+            renderChallengeQuestion(cachedQuestion, challengeState.roomData);
+        }
+    }
+}
+
 async function handleChallengeNext() {
+    // If we're viewing a previous question, just go forward through cache
+    const serverIndex = challengeState.roomData.current_question_index;
+    if (challengeState.currentQuestionIndex < serverIndex) {
+        challengeState.currentQuestionIndex++;
+        const cachedQuestion = challengeState.questionCache[challengeState.currentQuestionIndex];
+        if (cachedQuestion) {
+            renderChallengeQuestion(cachedQuestion, challengeState.roomData);
+            return;
+        }
+        // If not cached, polling will pick it up
+        return;
+    }
+    
+    // Admin advancing to next question on server
     try {
         const response = await fetch(`${window.API.URL}/rooms/next`, {
             method: 'POST',

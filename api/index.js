@@ -1291,7 +1291,7 @@ app.get('/api/rooms/:code', async (req, res) => {
         const room = roomResult.rows[0];
 
         const participantsResult = await pool.query(`
-            SELECT id, username, is_admin, is_ready, total_correct, total_wrong, last_seen
+            SELECT id, username, is_admin, is_ready, total_correct, total_wrong, last_seen, score, is_eliminated
             FROM room_participants WHERE room_id = $1
             ORDER BY is_admin DESC, joined_at ASC
         `, [room.id]);
@@ -1334,12 +1334,20 @@ app.get('/api/rooms/:code', async (req, res) => {
             SELECT COUNT(*) as count FROM room_questions WHERE room_id = $1
         `, [room.id]);
 
+        // Count active (non-eliminated) participants and how many answered current question
+        const activeParticipants = participantsResult.rows.filter(p => !p.is_eliminated);
+        const answeredCount = answers.length;
+        const allAnswered = room.status === 'active' && activeParticipants.length > 0 && answeredCount >= activeParticipants.length;
+
         res.json({
             success: true,
             room: { ...room, totalQuestions: parseInt(questionCountResult.rows[0].count) },
             participants: participantsResult.rows,
             currentQuestion: room.status === 'active' ? currentQuestion : null,
-            answers
+            answers,
+            answeredCount,
+            activeParticipantCount: activeParticipants.length,
+            allAnswered
         });
 
     } catch (error) {
