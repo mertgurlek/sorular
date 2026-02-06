@@ -3604,3 +3604,183 @@ body:not(.dark-mode) .icon-moon { display: none; }
         grid-template-columns: 1fr;
     }
 }
+
+/* ==================== KRITIK KELIMELER ==================== */
+
+.kw-stats-bar {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.kw-stat-item {
+    background: var(--option-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 14px 10px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.kw-stat-value {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--accent);
+}
+
+.kw-stat-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.kw-search-bar {
+    margin-bottom: 16px;
+}
+
+.kw-search-bar input {
+    width: 100%;
+    padding: 10px 16px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--option-bg);
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    outline: none;
+    transition: border-color 0.2s;
+    box-sizing: border-box;
+}
+
+.kw-search-bar input:focus {
+    border-color: var(--accent);
+}
+
+.kw-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.kw-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: var(--option-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.kw-item:hover {
+    background: var(--option-hover);
+    border-color: var(--accent);
+}
+
+.kw-rank {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    min-width: 28px;
+    text-align: center;
+}
+
+.kw-item:nth-child(-n+3) .kw-rank {
+    color: var(--accent);
+    font-size: 0.95rem;
+}
+
+.kw-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.kw-expression {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+    word-break: break-word;
+}
+
+.kw-bar-container {
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.kw-bar {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.4s ease;
+}
+
+.kw-bar.kw-type-phrase {
+    background: var(--gradient-primary);
+}
+
+.kw-bar.kw-type-word {
+    background: var(--gradient-success);
+}
+
+.kw-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.kw-count {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.kw-type-badge {
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.kw-type-badge.kw-type-phrase {
+    background: rgba(108, 92, 231, 0.15);
+    color: var(--accent);
+}
+
+.kw-type-badge.kw-type-word {
+    background: var(--success-bg);
+    color: var(--success);
+}
+
+.kw-footer {
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+}
+
+@media (max-width: 600px) {
+    .kw-stats-bar {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .kw-item {
+        padding: 8px 10px;
+        gap: 8px;
+    }
+    
+    .kw-expression {
+        font-size: 0.85rem;
+    }
+}

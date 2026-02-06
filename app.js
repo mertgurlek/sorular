@@ -526,6 +526,7 @@ function switchTab(tabName) {
     if (tabName === 'flashcards') initFlashcards();
     if (tabName === 'favorites') renderFavorites();
     if (tabName === 'challenge') loadChallengeHistory();
+    if (tabName === 'key-words') loadKeyWords();
 }
 
 // Quiz Functions
@@ -4125,3 +4126,129 @@ window.handleChallengeAnswer = handleChallengeAnswer;
 document.addEventListener('DOMContentLoaded', () => {
     initChallenge();
 });
+
+// ==================== KRITIK KELIMELER ====================
+
+let kwData = null;
+let kwLoaded = false;
+
+async function loadKeyWords() {
+    if (kwLoaded && kwData) {
+        renderKeyWords();
+        return;
+    }
+
+    const content = document.getElementById('kwContent');
+    content.innerHTML = '<p class="loading">Frekans verileri yükleniyor...</p>';
+
+    try {
+        const response = await fetch('./word_frequency_results.json');
+        if (!response.ok) throw new Error('Frekans dosyası bulunamadı');
+        kwData = await response.json();
+        kwLoaded = true;
+
+        // Populate category filter
+        if (kwData.by_category) {
+            const catFilter = document.getElementById('kwCategoryFilter');
+            const existingOptions = catFilter.querySelectorAll('option:not([value="all"])');
+            existingOptions.forEach(o => o.remove());
+            Object.keys(kwData.by_category).sort().forEach(cat => {
+                const opt = document.createElement('option');
+                opt.value = cat;
+                opt.textContent = cat;
+                catFilter.appendChild(opt);
+            });
+        }
+
+        // Update stats bar
+        const stats = kwData.stats || {};
+        document.getElementById('kwTotalExpressions').textContent = stats.unique_combined || 0;
+        document.getElementById('kwTotalPhrases').textContent = stats.unique_phrases_found || 0;
+        document.getElementById('kwTotalWords').textContent = stats.unique_words_found || 0;
+        document.getElementById('kwQuestionsAnalyzed').textContent = kwData.parameters?.total_questions || 0;
+
+        // Event listeners (only once)
+        document.getElementById('kwTypeFilter').addEventListener('change', renderKeyWords);
+        document.getElementById('kwCategoryFilter').addEventListener('change', renderKeyWords);
+        document.getElementById('kwSearch').addEventListener('input', renderKeyWords);
+
+        renderKeyWords();
+    } catch (error) {
+        console.error('Key words load error:', error);
+        content.innerHTML = `
+            <p class="error-state">
+                Frekans verileri yüklenemedi. Önce analiz scriptini çalıştırın.
+                <br><code>python word_frequency_analysis.py</code>
+            </p>
+        `;
+    }
+}
+
+function renderKeyWords() {
+    if (!kwData) return;
+
+    const typeFilter = document.getElementById('kwTypeFilter').value;
+    const categoryFilter = document.getElementById('kwCategoryFilter').value;
+    const searchQuery = document.getElementById('kwSearch').value.toLowerCase().trim();
+    const content = document.getElementById('kwContent');
+
+    // Pick data source based on category filter
+    let items;
+    if (categoryFilter !== 'all' && kwData.by_category && kwData.by_category[categoryFilter]) {
+        items = kwData.by_category[categoryFilter].top_expressions || [];
+    } else {
+        items = kwData.combined || [];
+    }
+
+    // Apply type filter
+    if (typeFilter === 'phrase') {
+        items = items.filter(i => i.type === 'phrase');
+    } else if (typeFilter === 'word') {
+        items = items.filter(i => i.type === 'word');
+    }
+
+    // Apply search
+    if (searchQuery) {
+        items = items.filter(i => i.expression.includes(searchQuery));
+    }
+
+    if (items.length === 0) {
+        content.innerHTML = '<p class="empty-state">Sonuç bulunamadı.</p>';
+        return;
+    }
+
+    // Find max count for bar width calculation
+    const maxCount = items[0]?.count || 1;
+
+    let html = '<div class="kw-list">';
+
+    items.forEach((item, index) => {
+        const barWidth = Math.max(5, Math.round((item.count / maxCount) * 100));
+        const typeClass = item.type === 'phrase' ? 'kw-type-phrase' : 'kw-type-word';
+        const typeLabel = item.type === 'phrase' ? 'ifade' : 'kelime';
+        const rank = index + 1;
+
+        html += `
+            <div class="kw-item">
+                <div class="kw-rank">${rank}</div>
+                <div class="kw-info">
+                    <div class="kw-expression">${item.expression}</div>
+                    <div class="kw-bar-container">
+                        <div class="kw-bar ${typeClass}" style="width: ${barWidth}%"></div>
+                    </div>
+                </div>
+                <div class="kw-meta">
+                    <span class="kw-count">${item.count}</span>
+                    <span class="kw-type-badge ${typeClass}">${typeLabel}</span>
+                </div>
+            </div>
+        `;
+    });
+
+    html += '</div>';
+
+    // Show total count
+    html += `<p class="kw-footer">Toplam ${items.length} ifade gösteriliyor</p>`;
+
+    content.innerHTML = html;
+}

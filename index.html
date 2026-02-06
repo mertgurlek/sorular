@@ -135,6 +135,7 @@
             <button class="tab" data-tab="wrong-answers">❌ Yanlışlarım</button>
             <button class="tab" data-tab="unknown-words">📚 Bilmediğim Kelimeler</button>
             <button class="tab" data-tab="challenge">⚔️ Yarışma</button>
+            <button class="tab" data-tab="key-words">🔑 Kritik Kelimeler</button>
             <button class="tab" data-tab="stats">📊 İstatistikler</button>
         </nav>
 
@@ -770,6 +771,52 @@
 
                 <div class="challenge-result-actions">
                     <button id="backToChallenge" class="btn btn-primary btn-large">⚔️ Yeni Yarışma</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Key Words Tab -->
+        <section id="key-words-tab" class="tab-content">
+            <div class="card">
+                <div class="section-header">
+                    <h2>🔑 Kritik Kelimeler & İfadeler</h2>
+                    <div class="filter-controls">
+                        <select id="kwTypeFilter">
+                            <option value="all">Tümü</option>
+                            <option value="phrase">Çok Kelimeli İfadeler</option>
+                            <option value="word">Tekil Kelimeler</option>
+                        </select>
+                        <select id="kwCategoryFilter">
+                            <option value="all">Tüm Kategoriler</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="kw-stats-bar" id="kwStatsBar">
+                    <div class="kw-stat-item">
+                        <span class="kw-stat-value" id="kwTotalExpressions">-</span>
+                        <span class="kw-stat-label">Toplam İfade</span>
+                    </div>
+                    <div class="kw-stat-item">
+                        <span class="kw-stat-value" id="kwTotalPhrases">-</span>
+                        <span class="kw-stat-label">Çok Kelimeli</span>
+                    </div>
+                    <div class="kw-stat-item">
+                        <span class="kw-stat-value" id="kwTotalWords">-</span>
+                        <span class="kw-stat-label">Tekil Kelime</span>
+                    </div>
+                    <div class="kw-stat-item">
+                        <span class="kw-stat-value" id="kwQuestionsAnalyzed">-</span>
+                        <span class="kw-stat-label">Analiz Edilen Soru</span>
+                    </div>
+                </div>
+
+                <div class="kw-search-bar">
+                    <input type="text" id="kwSearch" placeholder="Kelime veya ifade ara...">
+                </div>
+
+                <div id="kwContent" class="kw-content">
+                    <p class="loading">Yükleniyor...</p>
                 </div>
             </div>
         </section>
