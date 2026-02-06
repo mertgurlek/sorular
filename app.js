@@ -201,6 +201,7 @@ let userDataCache = {
     favorites: null,
     wrongAnswers: null,
     dailyStats: null,
+    learnedWords: null,
     loaded: false
 };
 
@@ -226,6 +227,7 @@ async function loadUserDataFromAPI() {
             userDataCache.favorites = data.data.favorites || [];
             userDataCache.wrongAnswers = data.data.wrongAnswers || [];
             userDataCache.dailyStats = data.data.dailyStats || {};
+            userDataCache.learnedWords = data.data.learnedWords || [];
             userDataCache.loaded = true;
             
             // Also update localStorage as backup
@@ -233,6 +235,7 @@ async function loadUserDataFromAPI() {
             localStorage.setItem(window.Storage.KEYS.ANSWER_HISTORY, JSON.stringify(userDataCache.answerHistory));
             localStorage.setItem(window.Storage.KEYS.FAVORITES, JSON.stringify(userDataCache.favorites));
             localStorage.setItem(window.Storage.KEYS.DAILY_STATS, JSON.stringify(userDataCache.dailyStats));
+            localStorage.setItem('yds_learned_words', JSON.stringify(userDataCache.learnedWords));
             
             console.log('✅ User data loaded from server');
         }
@@ -4131,9 +4134,57 @@ document.addEventListener('DOMContentLoaded', () => {
 
 let kwData = null;
 let kwLoaded = false;
+let kwLearnedSet = new Set(); // Öğrenilen kelimeler
+
+const KW_LIMIT = 500;
+const KW_STORAGE_KEY = 'yds_learned_words';
+
+function getLearnedWords() {
+    if (isLoggedIn() && userDataCache.learnedWords) {
+        return new Set(userDataCache.learnedWords);
+    }
+    try {
+        const stored = localStorage.getItem(KW_STORAGE_KEY);
+        return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch { return new Set(); }
+}
+
+function saveLearnedWordsLocal() {
+    localStorage.setItem(KW_STORAGE_KEY, JSON.stringify([...kwLearnedSet]));
+}
+
+async function toggleLearnedWord(expression) {
+    const wasLearned = kwLearnedSet.has(expression);
+
+    if (wasLearned) {
+        kwLearnedSet.delete(expression);
+    } else {
+        kwLearnedSet.add(expression);
+    }
+
+    saveLearnedWordsLocal();
+
+    // Sync to API for logged-in users
+    if (isLoggedIn()) {
+        try {
+            if (wasLearned) {
+                await fetch(`${window.API.URL}/user/${currentUser.id}/learned-words/${encodeURIComponent(expression)}`, { method: 'DELETE' });
+            } else {
+                await fetch(`${window.API.URL}/user/${currentUser.id}/learned-words`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ expression })
+                });
+            }
+        } catch (e) { console.error('Learned word sync error:', e); }
+    }
+
+    renderKeyWords();
+}
 
 async function loadKeyWords() {
     if (kwLoaded && kwData) {
+        kwLearnedSet = getLearnedWords();
         renderKeyWords();
         return;
     }
@@ -4146,6 +4197,7 @@ async function loadKeyWords() {
         if (!response.ok) throw new Error('Frekans dosyası bulunamadı');
         kwData = await response.json();
         kwLoaded = true;
+        kwLearnedSet = getLearnedWords();
 
         // Populate category filter
         if (kwData.by_category) {
@@ -4159,13 +4211,6 @@ async function loadKeyWords() {
                 catFilter.appendChild(opt);
             });
         }
-
-        // Update stats bar
-        const stats = kwData.stats || {};
-        document.getElementById('kwTotalExpressions').textContent = stats.unique_combined || 0;
-        document.getElementById('kwTotalPhrases').textContent = stats.unique_phrases_found || 0;
-        document.getElementById('kwTotalWords').textContent = stats.unique_words_found || 0;
-        document.getElementById('kwQuestionsAnalyzed').textContent = kwData.parameters?.total_questions || 0;
 
         // Event listeners (only once)
         document.getElementById('kwTypeFilter').addEventListener('change', renderKeyWords);
@@ -4193,46 +4238,86 @@ function renderKeyWords() {
     const content = document.getElementById('kwContent');
 
     // Pick data source based on category filter
-    let items;
+    let allItems;
     if (categoryFilter !== 'all' && kwData.by_category && kwData.by_category[categoryFilter]) {
-        items = kwData.by_category[categoryFilter].top_expressions || [];
+        allItems = kwData.by_category[categoryFilter].top_expressions || [];
     } else {
-        items = kwData.combined || [];
+        allItems = kwData.combined || [];
     }
 
     // Apply type filter
     if (typeFilter === 'phrase') {
-        items = items.filter(i => i.type === 'phrase');
+        allItems = allItems.filter(i => i.type === 'phrase');
     } else if (typeFilter === 'word') {
-        items = items.filter(i => i.type === 'word');
+        allItems = allItems.filter(i => i.type === 'word');
     }
 
     // Apply search
     if (searchQuery) {
-        items = items.filter(i => i.expression.includes(searchQuery));
+        allItems = allItems.filter(i => i.expression.includes(searchQuery));
     }
 
-    if (items.length === 0) {
+    // Limit to KW_LIMIT items
+    const limitedItems = allItems.slice(0, KW_LIMIT);
+
+    // Calculate progress
+    const totalInList = limitedItems.length;
+    const learnedInList = limitedItems.filter(i => kwLearnedSet.has(i.expression)).length;
+    const remainingInList = totalInList - learnedInList;
+    const progressPct = totalInList > 0 ? Math.round((learnedInList / totalInList) * 100) : 0;
+
+    // Update stats bar — show real unique counts from analysis stats
+    const realStats = kwData.stats || {};
+    document.getElementById('kwTotalExpressions').textContent = realStats.unique_combined || totalInList;
+    document.getElementById('kwTotalPhrases').textContent = realStats.unique_phrases_found || 0;
+    document.getElementById('kwTotalWords').textContent = realStats.unique_words_found || 0;
+    document.getElementById('kwQuestionsAnalyzed').textContent = kwData.parameters?.total_questions || 0;
+
+    // Filter out learned words (show only unlearned)
+    const unlearnedItems = limitedItems.filter(i => !kwLearnedSet.has(i.expression));
+
+    if (unlearnedItems.length === 0 && totalInList > 0) {
+        content.innerHTML = `
+            <div class="kw-progress-section">
+                ${renderProgressBar(learnedInList, totalInList, progressPct)}
+            </div>
+            <div class="kw-complete-message">
+                <span class="kw-complete-icon">🎉</span>
+                <h3>Tebrikler!</h3>
+                <p>Bu listedeki tüm ${totalInList} ifadeyi öğrendiniz!</p>
+                <button class="btn btn-secondary btn-small" onclick="kwLearnedSet.clear(); saveLearnedWordsLocal(); renderKeyWords();">Sıfırla</button>
+            </div>
+        `;
+        return;
+    }
+
+    if (totalInList === 0) {
         content.innerHTML = '<p class="empty-state">Sonuç bulunamadı.</p>';
         return;
     }
 
-    // Find max count for bar width calculation
-    const maxCount = items[0]?.count || 1;
+    // Find max count for bar width
+    const maxCount = unlearnedItems[0]?.count || 1;
 
-    let html = '<div class="kw-list">';
+    let html = `
+        <div class="kw-progress-section">
+            ${renderProgressBar(learnedInList, totalInList, progressPct)}
+        </div>
+        <div class="kw-list">
+    `;
 
-    items.forEach((item, index) => {
+    unlearnedItems.forEach((item, index) => {
         const barWidth = Math.max(5, Math.round((item.count / maxCount) * 100));
         const typeClass = item.type === 'phrase' ? 'kw-type-phrase' : 'kw-type-word';
         const typeLabel = item.type === 'phrase' ? 'ifade' : 'kelime';
         const rank = index + 1;
+        const expr = item.expression;
 
         html += `
-            <div class="kw-item">
+            <div class="kw-item" id="kw-${rank}">
                 <div class="kw-rank">${rank}</div>
                 <div class="kw-info">
-                    <div class="kw-expression">${item.expression}</div>
+                    <div class="kw-expression">${expr}</div>
                     <div class="kw-bar-container">
                         <div class="kw-bar ${typeClass}" style="width: ${barWidth}%"></div>
                     </div>
@@ -4241,14 +4326,28 @@ function renderKeyWords() {
                     <span class="kw-count">${item.count}</span>
                     <span class="kw-type-badge ${typeClass}">${typeLabel}</span>
                 </div>
+                <button class="btn btn-small kw-learn-btn" onclick="toggleLearnedWord('${expr.replace(/'/g, "\\'")}')">✓ Öğrendim</button>
             </div>
         `;
     });
 
     html += '</div>';
-
-    // Show total count
-    html += `<p class="kw-footer">Toplam ${items.length} ifade gösteriliyor</p>`;
+    html += `<p class="kw-footer">${unlearnedItems.length} öğrenilecek ifade gösteriliyor (${learnedInList} öğrenildi)</p>`;
 
     content.innerHTML = html;
+}
+
+function renderProgressBar(learned, total, pct) {
+    return `
+        <div class="kw-progress-bar-wrapper">
+            <div class="kw-progress-labels">
+                <span class="kw-progress-learned">✓ ${learned} öğrenildi</span>
+                <span class="kw-progress-remaining">${total - learned} kaldı</span>
+            </div>
+            <div class="kw-progress-track">
+                <div class="kw-progress-fill" style="width: ${pct}%"></div>
+            </div>
+            <div class="kw-progress-pct">${pct}%</div>
+        </div>
+    `;
 }

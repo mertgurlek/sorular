@@ -10,11 +10,11 @@ app.use(cors());
 app.use(express.json());
 
 // PostgreSQL Connection
+const dbUrl = process.env.DATABASE_URL || '';
+const isLocalDb = dbUrl.includes('localhost') || dbUrl.includes('127.0.0.1');
 const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: {
-        rejectUnauthorized: false
-    }
+    connectionString: dbUrl,
+    ssl: isLocalDb ? false : { rejectUnauthorized: false }
 });
 
 // Initialize database tables
@@ -110,6 +110,19 @@ async function initDatabase() {
             )
         `);
         
+        // User learned words table (for key words tracking)
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS user_learned_words (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                expression VARCHAR(200) NOT NULL,
+                learned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, expression)
+            )
+        `);
+        
+        await pool.query(`CREATE INDEX IF NOT EXISTS idx_user_learned_words_user_id ON user_learned_words(user_id)`);
+
         // User daily stats table
         await pool.query(`
             CREATE TABLE IF NOT EXISTS user_daily_stats (
@@ -803,6 +816,56 @@ app.post('/api/user/:userId/daily-stats', async (req, res) => {
     }
 });
 
+// --- LEARNED WORDS (Key Words Tracking) ---
+// Get user's learned words
+app.get('/api/user/:userId/learned-words', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const result = await pool.query(
+            'SELECT expression, learned_at FROM user_learned_words WHERE user_id = $1 ORDER BY learned_at DESC',
+            [userId]
+        );
+        res.json({ success: true, learnedWords: result.rows.map(r => r.expression) });
+    } catch (error) {
+        console.error('Get learned words error:', error);
+        res.status(500).json({ success: false, error: 'Sunucu hatası' });
+    }
+});
+
+// Add learned word
+app.post('/api/user/:userId/learned-words', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const { expression } = req.body;
+        
+        await pool.query(`
+            INSERT INTO user_learned_words (user_id, expression)
+            VALUES ($1, $2)
+            ON CONFLICT (user_id, expression) DO NOTHING
+        `, [userId, expression.toLowerCase()]);
+        
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Add learned word error:', error);
+        res.status(500).json({ success: false, error: 'Sunucu hatası' });
+    }
+});
+
+// Remove learned word
+app.delete('/api/user/:userId/learned-words/:expression', async (req, res) => {
+    try {
+        const { userId, expression } = req.params;
+        await pool.query(
+            'DELETE FROM user_learned_words WHERE user_id = $1 AND expression = $2',
+            [userId, decodeURIComponent(expression).toLowerCase()]
+        );
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Remove learned word error:', error);
+        res.status(500).json({ success: false, error: 'Sunucu hatası' });
+    }
+});
+
 // --- SYNC ALL USER DATA ---
 // Get all user data at once (for initial load)
 app.get('/api/user/:userId/all-data', async (req, res) => {
@@ -844,6 +907,12 @@ app.get('/api/user/:userId/all-data', async (req, res) => {
             [userId]
         );
         
+        // Get learned words
+        const learnedResult = await pool.query(
+            'SELECT expression FROM user_learned_words WHERE user_id = $1',
+            [userId]
+        );
+        
         // Get user stats
         const statsResult = await pool.query(
             'SELECT * FROM user_stats WHERE user_id = $1',
@@ -876,6 +945,7 @@ app.get('/api/user/:userId/all-data', async (req, res) => {
                 favorites: favoritesResult.rows.map(r => r.question_data),
                 wrongAnswers: wrongResult.rows,
                 dailyStats: dailyStats,
+                learnedWords: learnedResult.rows.map(r => r.expression),
                 stats: statsResult.rows[0] || null
             }
         });

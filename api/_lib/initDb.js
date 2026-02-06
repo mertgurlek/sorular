@@ -128,6 +128,19 @@ async function initDatabase() {
         
         await pool.query(`CREATE INDEX IF NOT EXISTS idx_user_favorites_user_id ON user_favorites(user_id)`);
         
+        // ==================== USER LEARNED WORDS ====================
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS user_learned_words (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                expression VARCHAR(200) NOT NULL,
+                learned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, expression)
+            )
+        `);
+        
+        await pool.query(`CREATE INDEX IF NOT EXISTS idx_user_learned_words_user_id ON user_learned_words(user_id)`);
+        
         // ==================== USER DAILY STATS ====================
         await pool.query(`
             CREATE TABLE IF NOT EXISTS user_daily_stats (
