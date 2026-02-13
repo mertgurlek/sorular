@@ -1,6 +1,11 @@
 // Quiz App - Main JavaScript
 // Uses modular utilities from src/utils/
 
+// Aliases for centralized helpers (defined in src/utils/helpers.js & storage.js)
+const parseOptions = (opts) => window.Helpers.parseOptions(opts);
+const buildExplanationHtml = (q) => window.Helpers.buildExplanationHtml(q);
+const shuffleArray = (arr) => window.Helpers.shuffleArray(arr);
+
 // Current User State
 let currentUser = null;
 
@@ -66,26 +71,13 @@ async function handleLogin() {
     }
     
     try {
-        const response = await fetch(`${window.API.URL}/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
-        });
-        
-        const data = await response.json();
-        
-        if (!response.ok) {
-            errorEl.textContent = data.error || 'Giriş başarısız';
-            return;
-        }
-        
+        const data = await window.API.Auth.login(username, password);
         currentUser = data.user;
         localStorage.setItem('yds_current_user', JSON.stringify(currentUser));
         showMainApp();
-        
     } catch (error) {
         console.error('Login error:', error);
-        errorEl.textContent = 'Sunucuya bağlanılamadı';
+        errorEl.textContent = error.message || 'Sunucuya bağlanılamadı';
     }
 }
 
@@ -108,27 +100,14 @@ async function handleRegister() {
     }
     
     try {
-        const response = await fetch(`${window.API.URL}/register`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, email, password })
-        });
-        
-        const data = await response.json();
-        
-        if (!response.ok) {
-            errorEl.textContent = data.error || 'Kayıt başarısız';
-            return;
-        }
-        
+        const data = await window.API.Auth.register(username, email, password);
         // Auto login after registration
         currentUser = data.user;
         localStorage.setItem('yds_current_user', JSON.stringify(currentUser));
         showMainApp();
-        
     } catch (error) {
         console.error('Register error:', error);
-        errorEl.textContent = 'Sunucuya bağlanılamadı';
+        errorEl.textContent = error.message || 'Sunucuya bağlanılamadı';
     }
 }
 
@@ -218,8 +197,7 @@ async function loadUserDataFromAPI() {
     }
     
     try {
-        const response = await fetch(`${window.API.URL}/user/${currentUser.id}/all-data`);
-        const data = await response.json();
+        const data = await window.API.request(`/user/${currentUser.id}/all-data`);
         
         if (data.success) {
             userDataCache.unknownWords = data.data.unknownWords || [];
@@ -252,15 +230,9 @@ async function syncUnknownWord(word, isAdding) {
     
     try {
         if (isAdding) {
-            await fetch(`${window.API.URL}/user/${currentUser.id}/unknown-words`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ word })
-            });
+            await window.API.UserData.addUnknownWord(currentUser.id, word);
         } else {
-            await fetch(`${window.API.URL}/user/${currentUser.id}/unknown-words/${encodeURIComponent(word)}`, {
-                method: 'DELETE'
-            });
+            await window.API.UserData.removeUnknownWord(currentUser.id, word);
         }
     } catch (error) {
         console.error('Sync unknown word error:', error);
@@ -273,16 +245,12 @@ async function syncAnswerHistory(question, userAnswer, isCorrect) {
     
     try {
         const questionHash = getQuestionKey(question);
-        await fetch(`${window.API.URL}/user/${currentUser.id}/answer-history`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                questionHash,
-                questionText: question.question_text.substring(0, 100),
-                category: question.category,
-                userAnswer,
-                isCorrect
-            })
+        await window.API.UserData.saveAnswerHistory(currentUser.id, {
+            questionHash,
+            questionText: question.question_text.substring(0, 100),
+            category: question.category,
+            userAnswer,
+            isCorrect
         });
     } catch (error) {
         console.error('Sync answer history error:', error);
@@ -295,17 +263,9 @@ async function syncFavorite(question, isAdding) {
     
     try {
         if (isAdding) {
-            await fetch(`${window.API.URL}/user/${currentUser.id}/favorites`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ question })
-            });
+            await window.API.UserData.addFavorite(currentUser.id, question);
         } else {
-            await fetch(`${window.API.URL}/user/${currentUser.id}/favorites`, {
-                method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ questionText: question.question_text })
-            });
+            await window.API.UserData.removeFavorite(currentUser.id, question.question_text);
         }
     } catch (error) {
         console.error('Sync favorite error:', error);
@@ -317,15 +277,11 @@ async function syncWrongAnswer(question, userAnswer) {
     if (!isLoggedIn()) return;
     
     try {
-        await fetch(`${window.API.URL}/user/${currentUser.id}/wrong-answers`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                questionText: question.question_text,
-                category: question.category,
-                userAnswer,
-                correctAnswer: question.correct_answer
-            })
+        await window.API.UserData.saveWrongAnswer(currentUser.id, {
+            questionText: question.question_text,
+            category: question.category,
+            userAnswer,
+            correctAnswer: question.correct_answer
         });
     } catch (error) {
         console.error('Sync wrong answer error:', error);
@@ -341,14 +297,10 @@ async function syncDailyStats() {
         const dailyStats = getDailyStats();
         const todayStats = dailyStats[today] || { answered: 0, correct: 0 };
         
-        await fetch(`${window.API.URL}/user/${currentUser.id}/daily-stats`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                date: today,
-                answered: todayStats.answered,
-                correct: todayStats.correct
-            })
+        await window.API.UserData.updateDailyStats(currentUser.id, {
+            date: today,
+            answered: todayStats.answered,
+            correct: todayStats.correct
         });
     } catch (error) {
         console.error('Sync daily stats error:', error);
@@ -394,42 +346,15 @@ async function loadCategories() {
     grid.innerHTML = '<p class="loading">Sorular yükleniyor...</p>';
 
     try {
-        // Fetch categories summary
-        const categoriesResponse = await fetch(`${window.API.URL}/categories`);
-        const categoriesData = await categoriesResponse.json();
-        
-        if (!categoriesData.success) {
-            throw new Error('Failed to load categories');
-        }
-        
-        // Fetch all questions
-        const questionsResponse = await fetch(`${window.API.URL}/questions`);
-        const questionsData = await questionsResponse.json();
-        
-        if (!questionsData.success) {
-            throw new Error('Failed to load questions');
-        }
+        // Fetch categories summary and all questions via centralized API
+        const categoriesData = await window.API.Questions.getCategories();
+        const questionsData = await window.API.Questions.getQuestions();
         
         // Store all questions - options is a plain array, enrichment fields are top-level columns
-        allQuestions = questionsData.questions.map(q => {
-            let options = q.options;
-            if (typeof options === 'string') {
-                try { options = JSON.parse(options); } catch (e) { options = []; }
-            }
-            
-            // Legacy support: if options is a nested object with .options array, extract it
-            if (options && typeof options === 'object' && !Array.isArray(options)) {
-                options = Array.isArray(options.options) ? options.options : [];
-            }
-            if (!Array.isArray(options)) {
-                options = [];
-            }
-            
-            return {
-                ...q,
-                options: options
-            };
-        });
+        allQuestions = questionsData.questions.map(q => ({
+            ...q,
+            options: parseOptions(q.options)
+        }));
         
         grid.innerHTML = '';
         
@@ -623,28 +548,7 @@ function showQuestion() {
     const optionsContainer = document.getElementById('optionsContainer');
     optionsContainer.innerHTML = '';
     
-    // Extract options - handle nested structure
-    let options = q.options;
-    console.log('DEBUG - Question options:', q.id, typeof options, Array.isArray(options), options);
-    if (typeof options === 'string') {
-        try {
-            options = JSON.parse(options);
-        } catch (e) {
-            console.error('Failed to parse options:', e);
-            options = [];
-        }
-    }
-    // Handle nested options structure (options.options)
-    if (options && typeof options === 'object' && !Array.isArray(options)) {
-        if (Array.isArray(options.options)) {
-            options = options.options;
-        } else {
-            options = [];
-        }
-    }
-    if (!Array.isArray(options)) {
-        options = [];
-    }
+    const options = parseOptions(q.options);
     
     options.forEach(opt => {
         const optionDiv = document.createElement('div');
@@ -884,17 +788,8 @@ function timeUp() {
 
     currentQuiz.wrong++;
     
-    // Build explanation from database fields
-    const hasDbExplanation = q.explanation_tr || q.tip || q.question_tr;
-    let explanationHtml = '';
-    if (hasDbExplanation) {
-        explanationHtml = '<div class="db-explanation">';
-        if (q.tip) explanationHtml += `<p class="explanation-tip">💡 <strong>İpucu:</strong> ${q.tip}</p>`;
-        if (q.explanation_tr) explanationHtml += `<p class="explanation-text">📝 <strong>Açıklama:</strong> ${q.explanation_tr}</p>`;
-        if (q.question_tr) explanationHtml += `<p class="explanation-translation">🇹🇷 <strong>Türkçe:</strong> ${q.question_tr}</p>`;
-        explanationHtml += '</div>';
-    }
-    const gptButton = !hasDbExplanation ? `<button class="btn btn-small gpt-ask-btn" onclick="openGPTPanel()">🤖 GPT'den Açıklama İste</button>` : '';
+    const explanationHtml = buildExplanationHtml(q);
+    const gptButton = !explanationHtml ? `<button class="btn btn-small gpt-ask-btn" onclick="openGPTPanel()">🤖 GPT'den Açıklama İste</button>` : '';
     
     // Show feedback
     const feedback = document.getElementById('feedback');
@@ -929,12 +824,7 @@ function timeUp() {
 }
 
 function makeWordsClickable(text) {
-    const unknownWords = getUnknownWords();
-    // Turkish + English characters support
-    return text.replace(/([a-zA-ZçÇğĞıİöÖşŞüÜ'-]+)/g, (match) => {
-        const isUnknown = unknownWords.includes(match.toLowerCase());
-        return `<span class="word ${isUnknown ? 'unknown' : ''}" data-word="${match.toLowerCase()}">${match}</span>`;
-    });
+    return window.Helpers.makeWordsClickable(text, getUnknownWords());
 }
 
 function addWordClickListeners() {
@@ -976,26 +866,7 @@ function selectAnswer(letter) {
     const feedback = document.getElementById('feedback');
     feedback.classList.remove('hidden', 'correct', 'wrong');
     
-    // Build explanation from database fields
-    const hasDbExplanation = q.explanation_tr || q.tip || q.question_tr;
-    let explanationHtml = '';
-    if (hasDbExplanation) {
-        explanationHtml = '<div class="db-explanation">';
-        if (q.tip) {
-            explanationHtml += `<p class="explanation-tip">💡 <strong>İpucu:</strong> ${q.tip}</p>`;
-        }
-        if (q.explanation_tr) {
-            explanationHtml += `<p class="explanation-text">📝 <strong>Açıklama:</strong> ${q.explanation_tr}</p>`;
-        }
-        if (q.question_tr) {
-            explanationHtml += `<p class="explanation-translation">🇹🇷 <strong>Türkçe:</strong> ${q.question_tr}</p>`;
-        }
-        if (q.difficulty) {
-            const difficultyLabels = { easy: '🟢 Kolay', medium: '🟡 Orta', hard: '🔴 Zor' };
-            explanationHtml += `<p class="explanation-difficulty"><strong>Zorluk:</strong> ${difficultyLabels[q.difficulty] || q.difficulty}</p>`;
-        }
-        explanationHtml += '</div>';
-    }
+    const explanationHtml = buildExplanationHtml(q);
     
     if (isCorrect) {
         currentQuiz.correct++;
@@ -1113,7 +984,7 @@ async function clearWrongAnswers() {
         // Clear from API for logged-in users
         if (isLoggedIn()) {
             try {
-                await fetch(`${window.API.URL}/user/${currentUser.id}/wrong-answers`, { method: 'DELETE' });
+                await window.API.UserData.clearWrongAnswers(currentUser.id);
             } catch (error) {
                 console.error('Clear wrong answers API error:', error);
             }
@@ -1197,7 +1068,7 @@ async function clearAnswerHistory() {
         // Clear from API for logged-in users
         if (isLoggedIn()) {
             try {
-                await fetch(`${window.API.URL}/user/${currentUser.id}/answer-history`, { method: 'DELETE' });
+                await window.API.UserData.clearAnswerHistory(currentUser.id);
             } catch (error) {
                 console.error('Clear answer history API error:', error);
             }
@@ -1232,7 +1103,7 @@ async function clearUnknownWords() {
         // Clear from API for logged-in users
         if (isLoggedIn()) {
             try {
-                await fetch(`${window.API.URL}/user/${currentUser.id}/unknown-words`, { method: 'DELETE' });
+                await window.API.UserData.clearUnknownWords(currentUser.id);
             } catch (error) {
                 console.error('Clear unknown words API error:', error);
             }
@@ -1497,7 +1368,7 @@ async function clearFavorites() {
         // Clear from API for logged-in users
         if (isLoggedIn()) {
             try {
-                await fetch(`${window.API.URL}/user/${currentUser.id}/favorites/all`, { method: 'DELETE' });
+                await window.API.UserData.clearFavorites(currentUser.id);
             } catch (error) {
                 console.error('Clear favorites API error:', error);
             }
@@ -1826,8 +1697,6 @@ function handleExamSwipe(e) {
 // Initialize swipe after DOM loaded
 document.addEventListener('DOMContentLoaded', initSwipeSupport);
 
-// Utility - using window.Helpers.shuffleArray from src/utils/helpers.js
-
 // ==================== EXAM SIMULATION ====================
 let examState = {
     questions: [],
@@ -1984,15 +1853,7 @@ function showExamQuestion() {
     const optionsContainer = document.getElementById('examOptionsContainer');
     optionsContainer.innerHTML = '';
     
-    // Extract options - handle nested structure
-    let options = q.options;
-    if (typeof options === 'string') {
-        try { options = JSON.parse(options); } catch (e) { options = []; }
-    }
-    if (options && typeof options === 'object' && !Array.isArray(options)) {
-        options = Array.isArray(options.options) ? options.options : [];
-    }
-    if (!Array.isArray(options)) options = [];
+    const options = parseOptions(q.options);
     
     options.forEach(opt => {
         const optionDiv = document.createElement('div');
@@ -2215,15 +2076,7 @@ function showExamReviewQuestion() {
     const optionsContainer = document.getElementById('examOptionsContainer');
     optionsContainer.innerHTML = '';
     
-    // Extract options - handle nested structure
-    let options = q.options;
-    if (typeof options === 'string') {
-        try { options = JSON.parse(options); } catch (e) { options = []; }
-    }
-    if (options && typeof options === 'object' && !Array.isArray(options)) {
-        options = Array.isArray(options.options) ? options.options : [];
-    }
-    if (!Array.isArray(options)) options = [];
+    const options = parseOptions(q.options);
     
     options.forEach(opt => {
         const optionDiv = document.createElement('div');
@@ -2536,29 +2389,20 @@ async function askGPTForCurrentQuestion() {
     }
 }
 
-// Local storage functions
+// Local storage functions - delegate to centralized Storage module
 function getGPTExplanationsLocal() {
-    return JSON.parse(localStorage.getItem(window.Storage.KEYS.GPT_EXPLANATIONS) || '{}');
+    return window.Storage.getGPTExplanations();
 }
 
 function saveGPTExplanationLocal(questionHash, explanation) {
-    const explanations = getGPTExplanationsLocal();
-    explanations[questionHash] = {
-        explanation,
-        timestamp: new Date().toISOString()
-    };
-    localStorage.setItem(window.Storage.KEYS.GPT_EXPLANATIONS, JSON.stringify(explanations));
+    window.Storage.saveGPTExplanation(questionHash, explanation);
 }
 
-// Database functions for shared cache
+// Database functions for shared cache - delegate to centralized API module
 async function getGPTExplanationFromDB(questionHash) {
     try {
-        const response = await fetch(`${window.API.URL}/gpt-explanation/${questionHash}`);
-        if (response.ok) {
-            const data = await response.json();
-            return data.explanation;
-        }
-        return null;
+        const data = await window.API.GPT.getCachedExplanation(questionHash);
+        return data?.explanation || null;
     } catch (error) {
         console.log('DB fetch failed, using local cache:', error);
         return null;
@@ -2567,11 +2411,7 @@ async function getGPTExplanationFromDB(questionHash) {
 
 async function saveGPTExplanationToDB(questionHash, questionText, explanation) {
     try {
-        await fetch(`${window.API.URL}/gpt-explanation`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ questionHash, questionText, explanation })
-        });
+        await window.API.GPT.saveExplanation(questionHash, questionText, explanation);
     } catch (error) {
         console.log('DB save failed:', error);
     }
@@ -2667,17 +2507,8 @@ async function fetchGPTExplanationForQuestion(wrongAnswerIndex) {
 
 async function fetchGPTExplanation(question, userAnswer) {
     // Build prompt for GPT
-    let optionsText = '';
-    let options = question.options;
-    if (typeof options === 'string') {
-        try { options = JSON.parse(options); } catch (e) { options = []; }
-    }
-    if (options && typeof options === 'object' && !Array.isArray(options)) {
-        options = Array.isArray(options.options) ? options.options : [];
-    }
-    if (Array.isArray(options)) {
-        optionsText = options.map(o => `${o.letter}) ${o.text}`).join('\n');
-    }
+    const options = parseOptions(question.options);
+    const optionsText = options.map(o => `${o.letter}) ${o.text}`).join('\n');
     
     const prompt = `Aşağıdaki YDS/YÖKDİL sorusunu öğrenciye açıkla.
 
@@ -2704,20 +2535,7 @@ Lütfen şu formatta açıkla:
 
 Basit ve anlaşılır Türkçe kullan. Öğrenciyi motive et.`;
 
-    const response = await fetch(`${window.API.URL}/openai-explain`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ prompt })
-    });
-
-    if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'API request failed');
-    }
-
-    const data = await response.json();
+    const data = await window.API.GPT.getExplanation(prompt);
     return data.explanation || 'Açıklama alınamadı.';
 }
 
@@ -3651,23 +3469,9 @@ function renderChallengeQuestion(question, room) {
         questionTextEl.textContent = question.question_text;
     }
     
-    // Parse options - same logic as main quiz to handle nested structure
-    let options = question.options;
-    if (typeof options === 'string') {
-        try { options = JSON.parse(options); } catch (e) { options = []; }
-    }
-    if (options && typeof options === 'object' && !Array.isArray(options)) {
-        if (Array.isArray(options.options)) {
-            options = options.options;
-        } else {
-            options = [];
-        }
-    }
-    if (!Array.isArray(options)) {
-        options = [];
-    }
+    const options = parseOptions(question.options);
     
-    // Render options - same structure as main quiz
+    // Render options
     const optionsContainer = document.getElementById('challengeOptionsContainer');
     optionsContainer.innerHTML = '';
     

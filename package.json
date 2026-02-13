@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "description": "YDS Quiz Application with Netlify Functions",
   "dependencies": {
-    "pg": "^8.11.3",
-    "bcryptjs": "^2.4.3"
+    "@vercel/analytics": "^1.6.1",
+    "bcryptjs": "^2.4.3",
+    "pg": "^8.11.3"
   }
 }

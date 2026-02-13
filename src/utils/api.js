@@ -110,6 +110,12 @@ const UserDataAPI = {
         });
     },
     
+    async clearUnknownWords(userId) {
+        return apiRequest(`/user/${userId}/unknown-words`, {
+            method: 'DELETE'
+        });
+    },
+    
     // Answer History
     async getAnswerHistory(userId) {
         return apiRequest(`/user/${userId}/answer-history`);
@@ -119,6 +125,12 @@ const UserDataAPI = {
         return apiRequest(`/user/${userId}/answer-history`, {
             method: 'POST',
             body: data
+        });
+    },
+    
+    async clearAnswerHistory(userId) {
+        return apiRequest(`/user/${userId}/answer-history`, {
+            method: 'DELETE'
         });
     },
     
@@ -141,6 +153,12 @@ const UserDataAPI = {
         });
     },
     
+    async clearFavorites(userId) {
+        return apiRequest(`/user/${userId}/favorites/all`, {
+            method: 'DELETE'
+        });
+    },
+    
     // Wrong Answers
     async getWrongAnswers(userId) {
         return apiRequest(`/user/${userId}/wrong-answers`);
@@ -150,6 +168,12 @@ const UserDataAPI = {
         return apiRequest(`/user/${userId}/wrong-answers`, {
             method: 'POST',
             body: data
+        });
+    },
+    
+    async clearWrongAnswers(userId) {
+        return apiRequest(`/user/${userId}/wrong-answers`, {
+            method: 'DELETE'
         });
     },
     

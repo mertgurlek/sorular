@@ -105,10 +105,27 @@ function generateQuestionHash(questionText) {
     return btoa(unescape(encodeURIComponent(questionText.substring(0, 50)))).replace(/[^a-zA-Z0-9]/g, '');
 }
 
-// Play sound effect
-function playSound(type) {
-    // Sound effects are optional - implement if needed
-    // This is a placeholder for sound functionality
+// Build explanation HTML from question's enrichment fields (used in quiz feedback)
+function buildExplanationHtml(question) {
+    const hasData = question.explanation_tr || question.tip || question.question_tr;
+    if (!hasData) return '';
+
+    let html = '<div class="db-explanation">';
+    if (question.tip) {
+        html += `<p class="explanation-tip">💡 <strong>İpucu:</strong> ${question.tip}</p>`;
+    }
+    if (question.explanation_tr) {
+        html += `<p class="explanation-text">📝 <strong>Açıklama:</strong> ${question.explanation_tr}</p>`;
+    }
+    if (question.question_tr) {
+        html += `<p class="explanation-translation">🇹🇷 <strong>Türkçe:</strong> ${question.question_tr}</p>`;
+    }
+    if (question.difficulty) {
+        const difficultyLabels = { easy: '🟢 Kolay', medium: '🟡 Orta', hard: '🔴 Zor' };
+        html += `<p class="explanation-difficulty"><strong>Zorluk:</strong> ${difficultyLabels[question.difficulty] || question.difficulty}</p>`;
+    }
+    html += '</div>';
+    return html;
 }
 
 // Show/hide element helpers
@@ -175,7 +192,7 @@ window.Helpers = {
     extractQuestionExtras,
     makeWordsClickable,
     generateQuestionHash,
-    playSound,
+    buildExplanationHtml,
     showElement,
     hideElement,
     toggleElement,
