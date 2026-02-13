@@ -2,12 +2,37 @@
   "name": "YDS Soru Çalışma",
   "short_name": "YDS Quiz",
   "description": "YDS sınavına hazırlık için interaktif soru çalışma uygulaması",
-  "start_url": "./index.html",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
-  "background_color": "#1a1a2e",
-  "theme_color": "#e94560",
+  "background_color": "#0f0f1a",
+  "theme_color": "#6c5ce7",
   "orientation": "portrait-primary",
-  "icons": [],
+  "icons": [
+    { "src": "icons/icon-72.png", "sizes": "72x72", "type": "image/png" },
+    { "src": "icons/icon-96.png", "sizes": "96x96", "type": "image/png" },
+    { "src": "icons/icon-128.png", "sizes": "128x128", "type": "image/png" },
+    { "src": "icons/icon-144.png", "sizes": "144x144", "type": "image/png" },
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-384.png", "sizes": "384x384", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-192-maskable.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Quiz Başlat",
+      "short_name": "Quiz",
+      "url": "./?tab=quiz",
+      "icons": [{ "src": "icons/icon-96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Sınav Modu",
+      "short_name": "Sınav",
+      "url": "./?tab=exam",
+      "icons": [{ "src": "icons/icon-96.png", "sizes": "96x96" }]
+    }
+  ],
   "categories": ["education", "productivity"],
   "lang": "tr"
 }

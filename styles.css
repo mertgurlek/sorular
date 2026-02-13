@@ -4329,3 +4329,129 @@ body:not(.dark-mode) .icon-moon { display: none; }
         padding: 8px 12px;
     }
 }
+
+/* ==================== PWA INSTALL BANNER ==================== */
+.install-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 9999;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    padding: 12px 16px;
+    padding-top: calc(12px + env(safe-area-inset-top));
+    animation: slideDown 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideDown {
+    from { transform: translateY(-100%); }
+    to { transform: translateY(0); }
+}
+
+.install-banner-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.install-banner-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    flex-shrink: 0;
+}
+
+.install-banner-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.install-banner-text strong {
+    display: block;
+    font-size: 0.95rem;
+    color: var(--text-primary);
+}
+
+.install-banner-text span {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.install-banner .btn {
+    flex-shrink: 0;
+    min-height: 38px;
+    padding: 8px 18px;
+    font-size: 0.9rem;
+}
+
+.install-banner-close {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 4px 8px;
+    line-height: 1;
+    flex-shrink: 0;
+    transition: color 0.2s;
+}
+
+.install-banner-close:hover {
+    color: var(--text-primary);
+}
+
+/* iOS Install Guide */
+.ios-install-guide {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 9999;
+    padding: 0 16px;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+}
+
+.ios-guide-content {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+    position: relative;
+    max-width: 400px;
+    margin: 0 auto;
+    text-align: center;
+}
+
+.ios-guide-content p {
+    margin: 8px 0;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    line-height: 1.5;
+}
+
+.ios-guide-content .install-banner-close {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+}
+
+.ios-share-icon {
+    font-size: 1.1rem;
+}
+
+/* When install banner is visible, push content down */
+.install-banner:not(.hidden) ~ .auth-screen,
+.install-banner:not(.hidden) ~ .app-wrapper {
+    padding-top: 68px;
+}

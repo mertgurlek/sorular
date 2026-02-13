@@ -22,6 +22,75 @@ if ('serviceWorker' in navigator) {
     });
 }
 
+// ==================== PWA INSTALL PROMPT ====================
+let deferredPrompt = null;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    // Don't show if user dismissed before
+    if (localStorage.getItem('pwa_install_dismissed')) return;
+    showInstallBanner();
+});
+
+window.addEventListener('appinstalled', () => {
+    console.log('PWA installed');
+    deferredPrompt = null;
+    hideInstallBanner();
+});
+
+function showInstallBanner() {
+    const banner = document.getElementById('installBanner');
+    if (banner) banner.classList.remove('hidden');
+}
+
+function hideInstallBanner() {
+    const banner = document.getElementById('installBanner');
+    if (banner) banner.classList.add('hidden');
+}
+
+function initInstallPrompt() {
+    const installBtn = document.getElementById('installBtn');
+    const dismissBtn = document.getElementById('installDismiss');
+    const iosGuideDismiss = document.getElementById('iosGuideDismiss');
+
+    if (installBtn) {
+        installBtn.addEventListener('click', async () => {
+            if (!deferredPrompt) return;
+            deferredPrompt.prompt();
+            const { outcome } = await deferredPrompt.userChoice;
+            console.log('Install prompt outcome:', outcome);
+            deferredPrompt = null;
+            hideInstallBanner();
+        });
+    }
+
+    if (dismissBtn) {
+        dismissBtn.addEventListener('click', () => {
+            hideInstallBanner();
+            localStorage.setItem('pwa_install_dismissed', Date.now().toString());
+        });
+    }
+
+    if (iosGuideDismiss) {
+        iosGuideDismiss.addEventListener('click', () => {
+            const guide = document.getElementById('iosInstallGuide');
+            if (guide) guide.classList.add('hidden');
+            localStorage.setItem('pwa_install_dismissed', Date.now().toString());
+        });
+    }
+
+    // iOS Safari detection - show manual guide
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const isStandalone = window.navigator.standalone === true;
+    const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
+
+    if (isIOS && isSafari && !isStandalone && !localStorage.getItem('pwa_install_dismissed')) {
+        const guide = document.getElementById('iosInstallGuide');
+        if (guide) guide.classList.remove('hidden');
+    }
+}
+
 // ==================== AUTHENTICATION ====================
 function initAuth() {
     // Check if user is already logged in
@@ -313,6 +382,7 @@ async function syncDailyStats() {
 document.addEventListener('DOMContentLoaded', () => {
     initAuth();
     initTheme();
+    initInstallPrompt();
     loadCategories();
     initEventListeners();
     initFlashcardEventListeners();

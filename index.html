@@ -15,9 +15,35 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="icons/icon-192.png">
-    <link rel="icon" type="image/png" href="icons/icon-192.png">
+    <link rel="apple-touch-icon" sizes="144x144" href="icons/icon-144.png">
+    <link rel="apple-touch-icon" sizes="192x192" href="icons/icon-192.png">
+    <link rel="apple-touch-icon" sizes="512x512" href="icons/icon-512.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="icons/icon-96.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 </head>
 <body class="dark-mode">
+    <!-- PWA Install Banner -->
+    <div id="installBanner" class="install-banner hidden">
+        <div class="install-banner-content">
+            <img src="icons/icon-96.png" alt="YDS Quiz" class="install-banner-icon">
+            <div class="install-banner-text">
+                <strong>YDS Quiz</strong>
+                <span>Ana ekrana ekleyerek hızlıca eriş</span>
+            </div>
+            <button id="installBtn" class="btn btn-primary btn-small">Yükle</button>
+            <button id="installDismiss" class="install-banner-close">&times;</button>
+        </div>
+    </div>
+
+    <!-- iOS Install Guide -->
+    <div id="iosInstallGuide" class="ios-install-guide hidden">
+        <div class="ios-guide-content">
+            <button id="iosGuideDismiss" class="install-banner-close">&times;</button>
+            <p><strong>Ana Ekrana Ekle</strong></p>
+            <p>Safari'de <span class="ios-share-icon">⬆️</span> paylaş butonuna, ardından <strong>"Ana Ekrana Ekle"</strong> seçeneğine dokunun.</p>
+        </div>
+    </div>
+
     <!-- Auth Screen -->
     <div id="authScreen" class="auth-screen">
         <div class="auth-container">
