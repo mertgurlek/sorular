@@ -1,10 +1,7 @@
 // Quiz App - Main JavaScript
 // Uses modular utilities from src/utils/
 
-// Aliases for centralized helpers (defined in src/utils/helpers.js & storage.js)
-const parseOptions = (opts) => window.Helpers.parseOptions(opts);
-const buildExplanationHtml = (q) => window.Helpers.buildExplanationHtml(q);
-const shuffleArray = (arr) => window.Helpers.shuffleArray(arr);
+// Helpers are loaded globally from src/utils/helpers.js (parseOptions, buildExplanationHtml, shuffleArray, etc.)
 
 // Current User State
 let currentUser = null;
