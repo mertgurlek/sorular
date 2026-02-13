@@ -2728,16 +2728,17 @@ body:not(.dark-mode) .icon-moon { display: none; }
     display: flex;
     min-height: 100vh;
     position: relative;
-    overflow-x: hidden;
     width: 100%;
 }
 
 .app-wrapper .container {
     flex: 1;
     min-width: 0;
-    transition: margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 0.3s ease;
 }
 
+/* Desktop (>1200px): side-by-side, panel 380px */
 .app-wrapper.panel-open .container {
     margin-right: 380px;
 }
@@ -3879,27 +3880,49 @@ body:not(.dark-mode) .icon-moon { display: none; }
     transform: translateY(0);
 }
 
-/* Panel Open - Responsive Layout Fix */
-@media (max-width: 1200px) and (min-width: 901px) {
-    .app-wrapper.panel-open .container {
-        margin-right: 350px;
-    }
-    
+/* Panel Open - Responsive Layout (tek kaynak) */
+/* 1025-1200px: side-by-side, panel 350px */
+@media (max-width: 1200px) and (min-width: 1025px) {
     .gpt-chat-panel {
         width: 350px;
     }
+    .app-wrapper.panel-open .container {
+        margin-right: 350px;
+    }
 }
 
-@media (max-width: 900px) {
+/* 769-1024px landscape: side-by-side, panel 340px */
+@media (min-width: 769px) and (max-width: 1024px) and (orientation: landscape) {
+    .gpt-chat-panel {
+        width: 340px;
+    }
+    .app-wrapper.panel-open .container {
+        margin-right: 340px;
+    }
+}
+
+/* 769-1024px portrait: overlay */
+@media (min-width: 769px) and (max-width: 1024px) and (orientation: portrait) {
+    .gpt-chat-panel {
+        width: 380px;
+    }
     .app-wrapper.panel-open .container {
         margin-right: 0;
         opacity: 0.3;
         pointer-events: none;
     }
-    
+}
+
+/* <=768px: full overlay */
+@media (max-width: 768px) {
     .gpt-chat-panel {
         width: 100%;
         max-width: 100%;
+    }
+    .app-wrapper.panel-open .container {
+        margin-right: 0;
+        opacity: 0.3;
+        pointer-events: none;
     }
 }
 
@@ -4992,15 +5015,6 @@ body:not(.dark-mode) .icon-moon { display: none; }
         height: 280px;
     }
     
-    /* GPT panel */
-    .gpt-chat-panel {
-        width: 360px;
-    }
-    
-    .app-wrapper.panel-open .container {
-        margin-right: 360px;
-    }
-    
     /* Exam size selector */
     .exam-size-selector {
         grid-template-columns: repeat(2, 1fr);
@@ -5050,17 +5064,6 @@ body:not(.dark-mode) .icon-moon { display: none; }
         grid-template-columns: repeat(2, 1fr);
     }
     
-    /* GPT panel full overlay on portrait tablet */
-    .gpt-chat-panel {
-        width: 100%;
-        max-width: 420px;
-    }
-    
-    .app-wrapper.panel-open .container {
-        margin-right: 0;
-        opacity: 0.3;
-        pointer-events: none;
-    }
 }
 
 /* ==================== SMALL LAPTOP / LARGE TABLET (1025px - 1200px) ==================== */
