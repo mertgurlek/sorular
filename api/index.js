@@ -2,12 +2,76 @@ const express = require('express');
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const { generateToken, requireAuth, requireSameUser, optionalAuth } = require('./_lib/authMiddleware');
 
 const app = express();
 
-// Middleware
-app.use(cors());
-app.use(express.json());
+// Security headers
+app.use(helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false
+}));
+
+// CORS — restrict to known origins
+const allowedOrigins = [
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:3001',
+    process.env.FRONTEND_URL
+].filter(Boolean);
+
+app.use(cors({
+    origin: function (origin, callback) {
+        // Allow requests with no origin (mobile apps, curl, server-to-server)
+        if (!origin) return callback(null, true);
+        // Allow localhost with any port (dev/preview)
+        if (origin.match(/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/)) {
+            return callback(null, true);
+        }
+        // Allow Vercel deployments
+        if (origin.match(/\.vercel\.app$/)) {
+            return callback(null, true);
+        }
+        // Allow explicitly configured origins
+        if (allowedOrigins.includes(origin)) {
+            return callback(null, true);
+        }
+        callback(new Error('CORS policy violation'));
+    },
+    credentials: true
+}));
+
+app.use(express.json({ limit: '1mb' }));
+
+// Rate limiters
+const generalLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 300,
+    message: { success: false, error: 'Çok fazla istek. Lütfen biraz bekleyin.' },
+    standardHeaders: true,
+    legacyHeaders: false
+});
+
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    message: { success: false, error: 'Çok fazla giriş denemesi. 15 dakika sonra tekrar deneyin.' },
+    standardHeaders: true,
+    legacyHeaders: false
+});
+
+const openaiLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 10,
+    message: { success: false, error: 'GPT istek limiti aşıldı. 1 dakika sonra tekrar deneyin.' },
+    standardHeaders: true,
+    legacyHeaders: false
+});
+
+app.use('/api/', generalLimiter);
 
 // PostgreSQL Connection
 const dbUrl = process.env.DATABASE_URL || '';
@@ -146,7 +210,7 @@ initDatabase();
 // ==================== AUTH ROUTES ====================
 
 // Register
-app.post('/api/register', async (req, res) => {
+app.post('/api/register', authLimiter, async (req, res) => {
     try {
         const { username, email, password } = req.body;
         
@@ -154,8 +218,17 @@ app.post('/api/register', async (req, res) => {
             return res.status(400).json({ error: 'Tüm alanları doldurun' });
         }
         
-        if (password.length < 6) {
-            return res.status(400).json({ error: 'Şifre en az 6 karakter olmalı' });
+        if (typeof username !== 'string' || username.length < 3 || username.length > 50) {
+            return res.status(400).json({ error: 'Kullanıcı adı 3-50 karakter arası olmalı' });
+        }
+        
+        if (typeof password !== 'string' || password.length < 6 || password.length > 128) {
+            return res.status(400).json({ error: 'Şifre 6-128 karakter arası olmalı' });
+        }
+        
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (typeof email !== 'string' || !emailRegex.test(email) || email.length > 255) {
+            return res.status(400).json({ error: 'Geçerli bir email adresi girin' });
         }
         
         const existingUser = await pool.query(
@@ -182,8 +255,11 @@ app.post('/api/register', async (req, res) => {
             [user.id]
         );
         
+        const token = generateToken(user);
+        
         res.status(201).json({
             message: 'Kayıt başarılı!',
+            token,
             user: {
                 id: user.id,
                 username: user.username,
@@ -198,7 +274,7 @@ app.post('/api/register', async (req, res) => {
 });
 
 // Login
-app.post('/api/login', async (req, res) => {
+app.post('/api/login', authLimiter, async (req, res) => {
     try {
         const { username, password } = req.body;
         
@@ -232,8 +308,11 @@ app.post('/api/login', async (req, res) => {
             [user.id]
         );
         
+        const token = generateToken(user);
+        
         res.json({
             message: 'Giriş başarılı!',
+            token,
             user: {
                 id: user.id,
                 username: user.username,
@@ -247,6 +326,9 @@ app.post('/api/login', async (req, res) => {
         res.status(500).json({ error: 'Sunucu hatası' });
     }
 });
+
+// Protect all /api/user/:userId routes — require auth + same user
+app.use('/api/user/:userId', requireAuth, requireSameUser);
 
 // Get user profile
 app.get('/api/user/:userId', async (req, res) => {
@@ -300,7 +382,7 @@ app.post('/api/user/:userId/stats', async (req, res) => {
 });
 
 // Save GPT explanation
-app.post('/api/gpt-explanation', async (req, res) => {
+app.post('/api/gpt-explanation', requireAuth, async (req, res) => {
     try {
         const { questionHash, questionText, explanation } = req.body;
         
@@ -345,7 +427,7 @@ app.get('/api/health', (req, res) => {
     res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-app.post('/api/openai-explain', async (req, res) => {
+app.post('/api/openai-explain', openaiLimiter, requireAuth, async (req, res) => {
     try {
         const apiKey = process.env.OPENAI_API_KEY;
         const { prompt, model } = req.body || {};
@@ -987,7 +1069,7 @@ const YDS_DISTRIBUTION = {
 };
 
 // Create Room
-app.post('/api/rooms/create', async (req, res) => {
+app.post('/api/rooms/create', optionalAuth, async (req, res) => {
     try {
         const { name, adminId, adminName, mode, categoryQuestions, timeLimit, enableLives, maxLives, shuffleQuestions, scoringMode } = req.body;
         
@@ -1233,7 +1315,7 @@ async function ensureChallengeTables() {
 }
 
 // Join Room
-app.post('/api/rooms/join', async (req, res) => {
+app.post('/api/rooms/join', optionalAuth, async (req, res) => {
     try {
         const { roomCode, userId, username } = req.body;
 
@@ -1388,7 +1470,7 @@ app.post('/api/rooms/ready', async (req, res) => {
 });
 
 // Start Game
-app.post('/api/rooms/start', async (req, res) => {
+app.post('/api/rooms/start', optionalAuth, async (req, res) => {
     try {
         const { roomCode, adminName } = req.body;
 
@@ -1421,7 +1503,7 @@ app.post('/api/rooms/start', async (req, res) => {
 });
 
 // Submit Answer
-app.post('/api/rooms/answer', async (req, res) => {
+app.post('/api/rooms/answer', optionalAuth, async (req, res) => {
     try {
         const { roomCode, username, questionIndex, answer, answerTimeMs } = req.body;
 
@@ -1624,7 +1706,7 @@ async function finishGame(roomId) {
 }
 
 // End Game Early
-app.post('/api/rooms/end', async (req, res) => {
+app.post('/api/rooms/end', optionalAuth, async (req, res) => {
     try {
         const { roomCode, adminName } = req.body;
 

@@ -6,21 +6,42 @@ const API_URL = (window.location.hostname === 'localhost' || window.location.hos
     ? 'http://localhost:3001/api'
     : '/api';
 
+// Token management
+function getAuthToken() {
+    return localStorage.getItem('auth_token');
+}
+
+function setAuthToken(token) {
+    if (token) {
+        localStorage.setItem('auth_token', token);
+    } else {
+        localStorage.removeItem('auth_token');
+    }
+}
+
+function clearAuth() {
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('currentUser');
+}
+
 // Generic fetch wrapper with error handling
 async function apiRequest(endpoint, options = {}) {
     const url = `${API_URL}${endpoint}`;
     
-    const defaultOptions = {
-        headers: {
-            'Content-Type': 'application/json'
-        }
+    const defaultHeaders = {
+        'Content-Type': 'application/json'
     };
     
+    // Auto-attach JWT token if available
+    const token = getAuthToken();
+    if (token) {
+        defaultHeaders['Authorization'] = `Bearer ${token}`;
+    }
+    
     const mergedOptions = {
-        ...defaultOptions,
         ...options,
         headers: {
-            ...defaultOptions.headers,
+            ...defaultHeaders,
             ...options.headers
         }
     };
@@ -34,6 +55,10 @@ async function apiRequest(endpoint, options = {}) {
         const data = await response.json();
         
         if (!response.ok) {
+            // Auto-logout on 401 (expired/invalid token)
+            if (response.status === 401 && endpoint !== '/login' && endpoint !== '/register') {
+                clearAuth();
+            }
             throw new APIError(data.error || 'API request failed', response.status, data);
         }
         
@@ -59,21 +84,33 @@ class APIError extends Error {
 // Auth API
 const AuthAPI = {
     async login(username, password) {
-        return apiRequest('/login', {
+        const data = await apiRequest('/login', {
             method: 'POST',
             body: { username, password }
         });
+        if (data.token) {
+            setAuthToken(data.token);
+        }
+        return data;
     },
     
     async register(username, email, password) {
-        return apiRequest('/register', {
+        const data = await apiRequest('/register', {
             method: 'POST',
             body: { username, email, password }
         });
+        if (data.token) {
+            setAuthToken(data.token);
+        }
+        return data;
     },
     
     async getUser(userId) {
         return apiRequest(`/user/${userId}`);
+    },
+    
+    logout() {
+        clearAuth();
     }
 };
 
@@ -234,5 +271,8 @@ window.API = {
     Auth: AuthAPI,
     Questions: QuestionsAPI,
     UserData: UserDataAPI,
-    GPT: GPTAPI
+    GPT: GPTAPI,
+    getAuthToken,
+    setAuthToken,
+    clearAuth
 };

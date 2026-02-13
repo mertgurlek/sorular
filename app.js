@@ -200,6 +200,7 @@ function handleGuestLogin() {
 function handleLogout() {
     currentUser = null;
     localStorage.removeItem('yds_current_user');
+    if (window.API && window.API.clearAuth) window.API.clearAuth();
     document.getElementById('authScreen').classList.remove('hidden');
     document.getElementById('mainApp').classList.add('hidden');
     
