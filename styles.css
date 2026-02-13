@@ -3058,23 +3058,8 @@ body:not(.dark-mode) .icon-moon { display: none; }
     }
 }
 
-/* Responsive */
-@media (max-width: 900px) {
-    .gpt-chat-panel {
-        width: 100%;
-        max-width: 400px;
-    }
-    
-    .app-wrapper.panel-open .container {
-        margin-right: 0;
-    }
-}
-
+/* Responsive — GPT panel (mobile handled in Panel Open section below) */
 @media (max-width: 600px) {
-    .gpt-chat-panel {
-        max-width: 100%;
-    }
-    
     .gpt-panel-toggle {
         right: 16px;
         bottom: 16px;
@@ -3895,20 +3880,9 @@ body:not(.dark-mode) .icon-moon { display: none; }
 }
 
 /* Panel Open - Responsive Layout Fix */
-.app-wrapper.panel-open {
-    display: flex;
-}
-
-.app-wrapper.panel-open .container {
-    flex: 1;
-    max-width: calc(100% - 380px);
-    margin-right: 0;
-    transition: max-width 0.3s ease;
-}
-
-@media (max-width: 1200px) {
+@media (max-width: 1200px) and (min-width: 901px) {
     .app-wrapper.panel-open .container {
-        max-width: calc(100% - 350px);
+        margin-right: 350px;
     }
     
     .gpt-chat-panel {
@@ -3918,7 +3892,7 @@ body:not(.dark-mode) .icon-moon { display: none; }
 
 @media (max-width: 900px) {
     .app-wrapper.panel-open .container {
-        max-width: 100%;
+        margin-right: 0;
         opacity: 0.3;
         pointer-events: none;
     }
@@ -5024,7 +4998,7 @@ body:not(.dark-mode) .icon-moon { display: none; }
     }
     
     .app-wrapper.panel-open .container {
-        max-width: calc(100% - 360px);
+        margin-right: 360px;
     }
     
     /* Exam size selector */
@@ -5083,7 +5057,7 @@ body:not(.dark-mode) .icon-moon { display: none; }
     }
     
     .app-wrapper.panel-open .container {
-        max-width: 100%;
+        margin-right: 0;
         opacity: 0.3;
         pointer-events: none;
     }
