@@ -39,8 +39,9 @@ let deferredPrompt = null;
 window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredPrompt = e;
-    // Don't show if user dismissed before
-    if (localStorage.getItem('pwa_install_dismissed')) return;
+    // Don't show if user dismissed before (7 gün geçerli)
+    const dismissed = localStorage.getItem('pwa_install_dismissed');
+    if (dismissed && (Date.now() - parseInt(dismissed)) < 7 * 24 * 60 * 60 * 1000) return;
     showInstallBanner();
 });
 
@@ -92,13 +93,30 @@ function initInstallPrompt() {
     }
 
     // iOS Safari detection - show manual guide
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-    const isStandalone = window.navigator.standalone === true;
-    const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const isStandalone = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+    const isSafari = /Safari/.test(navigator.userAgent) && !/CriOS|FxiOS|OPiOS|EdgiOS|Chrome/.test(navigator.userAgent);
 
-    if (isIOS && isSafari && !isStandalone && !localStorage.getItem('pwa_install_dismissed')) {
+    // Dismiss 7 gün sonra expire olsun
+    const dismissedAt = localStorage.getItem('pwa_install_dismissed');
+    const dismissExpired = dismissedAt && (Date.now() - parseInt(dismissedAt)) > 7 * 24 * 60 * 60 * 1000;
+    if (dismissExpired) localStorage.removeItem('pwa_install_dismissed');
+
+    if (isIOS && !isStandalone && !localStorage.getItem('pwa_install_dismissed')) {
         const guide = document.getElementById('iosInstallGuide');
-        if (guide) guide.classList.remove('hidden');
+        if (guide) {
+            // Safari vs diğer iOS tarayıcılar için farklı talimat
+            const guideText = guide.querySelector('.ios-guide-instructions');
+            if (guideText) {
+                if (isSafari) {
+                    guideText.innerHTML = 'Safari\'de <span class="ios-share-icon">⬆️</span> paylaş butonuna, ardından <strong>"Ana Ekrana Ekle"</strong> seçeneğine dokunun.';
+                } else {
+                    guideText.innerHTML = 'Tarayıcı menüsünden <strong>"Ana Ekrana Ekle"</strong> veya <strong>"Add to Home Screen"</strong> seçeneğine dokunun.';
+                }
+            }
+            guide.classList.remove('hidden');
+        }
     }
 }
 
