@@ -1,6 +1,13 @@
 const { getPool } = require('./db');
 
+// Global flag — aynı process'te tekrar çalışmasını engelle
+let _dbInitialized = false;
+
 async function initDatabase() {
+    if (_dbInitialized) {
+        return;
+    }
+    
     const pool = getPool();
     
     try {
@@ -312,6 +319,7 @@ async function initDatabase() {
             )
         `);
         
+        _dbInitialized = true;
         console.log('Database tables initialized');
     } catch (error) {
         console.error('Database initialization error:', error);

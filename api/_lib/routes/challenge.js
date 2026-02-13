@@ -90,11 +90,13 @@ router.post('/create', optionalAuth, asyncHandler(async (req, res) => {
         VALUES ($1, $2, $3, TRUE, TRUE, $4)
     `, [room.id, adminId || null, adminName, maxLives || 3]);
 
-    for (let i = 0; i < questionsToSelect.length; i++) {
+    // Bulk insert — tek sorguda tüm soruları ekle
+    if (questionsToSelect.length > 0) {
+        const values = questionsToSelect.map((q, i) => `($1, ${q.id}, ${i})`).join(', ');
         await query(`
             INSERT INTO room_questions (room_id, question_id, question_index)
-            VALUES ($1, $2, $3)
-        `, [room.id, questionsToSelect[i].id, i]);
+            VALUES ${values}
+        `, [room.id]);
     }
 
     res.json({

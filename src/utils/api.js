@@ -123,6 +123,22 @@ const QuestionsAPI = {
     async getQuestions(category = null) {
         const params = category && category !== 'all' ? `?category=${encodeURIComponent(category)}` : '';
         return apiRequest(`/questions${params}`);
+    },
+    
+    // Quiz soru seçimi — sunucu tarafında shuffle + limit
+    async getQuestionsForQuiz(category, limit, shuffle = true) {
+        return apiRequest('/questions/quiz', {
+            method: 'POST',
+            body: { category, limit, shuffle }
+        });
+    },
+    
+    // Sınav modu — YDS dağılımlı soru seçimi
+    async getQuestionsForExam(examSize, distribution) {
+        return apiRequest('/questions/exam', {
+            method: 'POST',
+            body: { examSize, distribution }
+        });
     }
 };
 
@@ -235,6 +251,74 @@ const UserDataAPI = {
             method: 'POST',
             body: stats
         });
+    },
+    
+    // Batch sync — tek istekte birden fazla veri türünü kaydet
+    async batchSync(userId, data) {
+        return apiRequest(`/user/${userId}/batch-sync`, {
+            method: 'POST',
+            body: data
+        });
+    }
+};
+
+// Sync Queue — cevapları biriktirir, debounce ile toplu gönderir
+const SyncQueue = {
+    _queue: { answerHistory: [], wrongAnswers: [] },
+    _timer: null,
+    _DEBOUNCE_MS: 5000,
+    
+    addAnswerHistory(item) {
+        this._queue.answerHistory.push(item);
+        this._scheduleFlush();
+    },
+    
+    addWrongAnswer(item) {
+        this._queue.wrongAnswers.push(item);
+        this._scheduleFlush();
+    },
+    
+    _scheduleFlush() {
+        if (this._timer) clearTimeout(this._timer);
+        this._timer = setTimeout(() => this.flush(), this._DEBOUNCE_MS);
+    },
+    
+    // Quiz bitince veya sayfa kapatılırken çağır
+    async flush() {
+        if (this._timer) { clearTimeout(this._timer); this._timer = null; }
+        
+        const token = getToken();
+        if (!token) return;
+        
+        const currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
+        if (!currentUser?.id) return;
+        
+        const answerHistory = this._queue.answerHistory.splice(0);
+        const wrongAnswers = this._queue.wrongAnswers.splice(0);
+        
+        if (answerHistory.length === 0 && wrongAnswers.length === 0) return;
+        
+        // Daily stats'ı da ekle
+        const todayKey = new Date().toISOString().split('T')[0];
+        const dailyStatsRaw = JSON.parse(localStorage.getItem('dailyStats') || '{}');
+        const todayStats = dailyStatsRaw[todayKey] || { answered: 0, correct: 0 };
+        
+        try {
+            await UserDataAPI.batchSync(currentUser.id, {
+                answerHistory,
+                wrongAnswers,
+                dailyStats: { date: todayKey, answered: todayStats.answered, correct: todayStats.correct }
+            });
+        } catch (error) {
+            // Başarısız olursa kuyruğa geri ekle
+            this._queue.answerHistory.unshift(...answerHistory);
+            this._queue.wrongAnswers.unshift(...wrongAnswers);
+            console.error('Batch sync failed, will retry:', error);
+        }
+    },
+    
+    hasPending() {
+        return this._queue.answerHistory.length > 0 || this._queue.wrongAnswers.length > 0;
     }
 };
 
@@ -307,6 +391,13 @@ const FeedbackAPI = {
     }
 };
 
+// Sayfa kapatılırken bekleyen sync verilerini gönder
+window.addEventListener('beforeunload', () => {
+    if (SyncQueue.hasPending()) {
+        SyncQueue.flush();
+    }
+});
+
 // Export all APIs
 window.API = {
     URL: API_URL,
@@ -317,6 +408,7 @@ window.API = {
     UserData: UserDataAPI,
     GPT: GPTAPI,
     Feedback: FeedbackAPI,
+    SyncQueue,
     getAuthToken,
     setAuthToken,
     clearAuth

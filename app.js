@@ -235,7 +235,6 @@ async function showMainApp() {
 }
 
 // State
-let allQuestions = [];
 let currentQuiz = {
     questions: [],
     currentIndex: 0,
@@ -320,22 +319,17 @@ async function syncUnknownWord(word, isAdding) {
     }
 }
 
-// Sync answer history to API
-async function syncAnswerHistory(question, userAnswer, isCorrect) {
+// Sync answer history to API (batch queue)
+function syncAnswerHistory(question, userAnswer, isCorrect) {
     if (!isLoggedIn()) return;
     
-    try {
-        const questionHash = getQuestionKey(question);
-        await window.API.UserData.saveAnswerHistory(currentUser.id, {
-            questionHash,
-            questionText: question.question_text.substring(0, 100),
-            category: question.category,
-            userAnswer,
-            isCorrect
-        });
-    } catch (error) {
-        console.error('Sync answer history error:', error);
-    }
+    window.API.SyncQueue.addAnswerHistory({
+        questionHash: getQuestionKey(question),
+        questionText: question.question_text.substring(0, 100),
+        category: question.category,
+        userAnswer,
+        isCorrect
+    });
 }
 
 // Sync favorite to API
@@ -353,39 +347,24 @@ async function syncFavorite(question, isAdding) {
     }
 }
 
-// Sync wrong answer to API
-async function syncWrongAnswer(question, userAnswer) {
+// Sync wrong answer to API (batch queue)
+function syncWrongAnswer(question, userAnswer) {
     if (!isLoggedIn()) return;
     
-    try {
-        await window.API.UserData.saveWrongAnswer(currentUser.id, {
-            questionText: question.question_text,
-            category: question.category,
-            userAnswer,
-            correctAnswer: question.correct_answer
-        });
-    } catch (error) {
-        console.error('Sync wrong answer error:', error);
-    }
+    window.API.SyncQueue.addWrongAnswer({
+        questionText: question.question_text,
+        category: question.category,
+        userAnswer,
+        correctAnswer: question.correct_answer
+    });
 }
 
-// Sync daily stats to API
-async function syncDailyStats() {
+// Sync daily stats — artık batch sync ile otomatik gönderiliyor
+// SyncQueue.flush() çağrıldığında dailyStats de dahil edilir
+function syncDailyStats() {
     if (!isLoggedIn()) return;
-    
-    try {
-        const today = getTodayKey();
-        const dailyStats = getDailyStats();
-        const todayStats = dailyStats[today] || { answered: 0, correct: 0 };
-        
-        await window.API.UserData.updateDailyStats(currentUser.id, {
-            date: today,
-            answered: todayStats.answered,
-            correct: todayStats.correct
-        });
-    } catch (error) {
-        console.error('Sync daily stats error:', error);
-    }
+    // Debounced batch sync zaten schedule edilmiş durumda
+    // Ekstra bir şey yapmaya gerek yok — SyncQueue flush'ta dailyStats'ı localStorage'dan okur
 }
 
 // Constants loaded from window.Constants (src/utils/constants.js)
@@ -422,21 +401,13 @@ function toggleTheme() {
     localStorage.setItem(window.Storage.KEYS.THEME, isDark ? 'dark' : 'light');
 }
 
-// Load Categories from PostgreSQL API
+// Load Categories from PostgreSQL API (sadece kategoriler — sorular lazy yüklenir)
 async function loadCategories() {
     const grid = document.getElementById('category-grid');
-    grid.innerHTML = '<p class="loading">Sorular yükleniyor...</p>';
+    grid.innerHTML = '<p class="loading">Kategoriler yükleniyor...</p>';
 
     try {
-        // Fetch categories summary and all questions via centralized API
         const categoriesData = await window.API.Questions.getCategories();
-        const questionsData = await window.API.Questions.getQuestions();
-        
-        // Store all questions - options is a plain array, enrichment fields are top-level columns
-        allQuestions = questionsData.questions.map(q => ({
-            ...q,
-            options: parseOptions(q.options)
-        }));
         
         grid.innerHTML = '';
         
@@ -473,13 +444,13 @@ async function loadCategories() {
             filterSelect.appendChild(option);
         }
         
-        console.log(`✅ Loaded ${allQuestions.length} questions from database`);
+        console.log(`✅ Loaded ${categoriesData.categories.length} categories`);
         
     } catch (error) {
         console.error('Failed to load categories:', error);
         grid.innerHTML = `
             <p class="error-state">
-                Sorular yüklenemedi. 
+                Kategoriler yüklenemedi. 
                 <button onclick="loadCategories()" class="btn btn-small">Tekrar Dene</button>
             </p>
         `;
@@ -540,56 +511,66 @@ function switchTab(tabName) {
 }
 
 // Quiz Functions
-function startQuiz() {
+async function startQuiz() {
     const category = currentQuiz.selectedCategory;
     const countSelect = document.getElementById('questionCount').value;
     const shuffle = document.getElementById('shuffleQuestions').checked;
     const timerLimit = parseInt(document.getElementById('timerMode').value);
     const historyFilter = document.getElementById('historyFilter')?.value || 'all';
 
-    let questions;
-    
-    // First filter by category
-    questions = category === 'all' 
-        ? [...allQuestions]
-        : allQuestions.filter(q => q.category === category);
-    
-    // Then apply history filter
-    questions = filterQuestionsByHistory(questions, historyFilter);
+    // Disable start button and show loading
+    const startBtn = document.getElementById('startQuiz');
+    startBtn.disabled = true;
+    startBtn.textContent = 'Sorular yükleniyor...';
 
-    if (questions.length === 0) {
-        alert('Bu kategoride soru bulunamadı!');
-        return;
+    try {
+        // Sunucudan soruları çek (lazy loading)
+        const limit = countSelect === 'all' ? 'all' : parseInt(countSelect);
+        const data = await window.API.Questions.getQuestionsForQuiz(category, limit, shuffle);
+        let questions = data.questions.map(q => ({ ...q, options: parseOptions(q.options) }));
+
+        // Client-side history filter (requires local answer history)
+        if (historyFilter !== 'all') {
+            questions = filterQuestionsByHistory(questions, historyFilter);
+        }
+
+        if (questions.length === 0) {
+            alert('Bu kategoride soru bulunamadı!');
+            startBtn.disabled = false;
+            startBtn.textContent = 'Başla';
+            return;
+        }
+
+        currentQuiz.questions = questions;
+        currentQuiz.currentIndex = 0;
+        currentQuiz.correct = 0;
+        currentQuiz.wrong = 0;
+        currentQuiz.timerLimit = timerLimit;
+        currentQuiz.timerRemaining = timerLimit;
+        currentQuiz.userAnswers = new Array(questions.length).fill(null);
+
+        // Setup timer display
+        const timerDisplay = document.getElementById('timerDisplay');
+        if (timerLimit > 0) {
+            timerDisplay.classList.remove('hidden');
+        } else {
+            timerDisplay.classList.add('hidden');
+        }
+
+        document.getElementById('category-selection').classList.add('hidden');
+        document.getElementById('quiz-area').classList.remove('hidden');
+        document.getElementById('quiz-results').classList.add('hidden');
+        document.body.classList.add('quiz-active');
+
+        document.getElementById('totalQuestions').textContent = currentQuiz.questions.length;
+        showQuestion();
+    } catch (error) {
+        console.error('Failed to load quiz questions:', error);
+        alert('Sorular yüklenemedi. Lütfen tekrar deneyin.');
+    } finally {
+        startBtn.disabled = false;
+        startBtn.textContent = 'Başla';
     }
-
-    if (shuffle) {
-        questions = shuffleArray(questions);
-    }
-
-    const count = countSelect === 'all' ? questions.length : parseInt(countSelect);
-    currentQuiz.questions = questions.slice(0, count);
-    currentQuiz.currentIndex = 0;
-    currentQuiz.correct = 0;
-    currentQuiz.wrong = 0;
-    currentQuiz.timerLimit = timerLimit;
-    currentQuiz.timerRemaining = timerLimit;
-    currentQuiz.userAnswers = new Array(questions.slice(0, count).length).fill(null);
-
-    // Setup timer display
-    const timerDisplay = document.getElementById('timerDisplay');
-    if (timerLimit > 0) {
-        timerDisplay.classList.remove('hidden');
-    } else {
-        timerDisplay.classList.add('hidden');
-    }
-
-    document.getElementById('category-selection').classList.add('hidden');
-    document.getElementById('quiz-area').classList.remove('hidden');
-    document.getElementById('quiz-results').classList.add('hidden');
-    document.body.classList.add('quiz-active');
-
-    document.getElementById('totalQuestions').textContent = currentQuiz.questions.length;
-    showQuestion();
 }
 
 function showQuestion() {
@@ -1059,6 +1040,11 @@ function showResults() {
     document.getElementById('finalCorrect').textContent = currentQuiz.correct;
     document.getElementById('finalWrong').textContent = currentQuiz.wrong;
     document.getElementById('finalPercentage').textContent = `${percentage}%`;
+    
+    // Quiz bitince bekleyen sync verilerini gönder
+    if (window.API?.SyncQueue) {
+        window.API.SyncQueue.flush();
+    }
 }
 
 function restartQuiz() {
@@ -1872,67 +1858,43 @@ function updateExamDistributionPreview(size) {
     `;
 }
 
-// Gerçek YDS dağılımına göre soru seç
-function selectQuestionsWithYDSDistribution(allQuestions, examSize = 'full') {
-    const distribution = window.Constants.YDS_DISTRIBUTION[examSize];
-    const selectedQuestions = [];
-    
-    // Her YDS kategorisi için soruları grupla
-    const questionsByCategory = {};
-    
-    for (const [ydsCategory, dbCategories] of Object.entries(window.Constants.CATEGORY_MAPPING)) {
-        questionsByCategory[ydsCategory] = allQuestions.filter(q => 
-            dbCategories.some(dbCat => q.category === dbCat || q.category?.includes(dbCat))
-        );
-    }
-    
-    // Dağılıma göre seç
-    for (const [category, count] of Object.entries(distribution)) {
-        const available = questionsByCategory[category] || [];
-        const shuffled = shuffleArray([...available]);
-        const selected = shuffled.slice(0, count);
-        selectedQuestions.push(...selected);
-    }
-    
-    // Eksik varsa diğer sorulardan tamamla
-    const targetCount = Object.values(distribution).reduce((a, b) => a + b, 0);
-    if (selectedQuestions.length < targetCount) {
-        const selectedIds = new Set(selectedQuestions.map(q => q.id));
-        const remaining = allQuestions.filter(q => !selectedIds.has(q.id));
-        const shuffledRemaining = shuffleArray([...remaining]);
-        const needed = targetCount - selectedQuestions.length;
-        selectedQuestions.push(...shuffledRemaining.slice(0, needed));
-    }
-    
-    // Son karıştırma
-    return shuffleArray(selectedQuestions);
-}
-
-function startExam() {
-    // Get selected exam size
+// Sınav modu — sunucudan YDS dağılımlı soru seçimi
+async function startExam() {
     const selectedSize = document.querySelector('input[name="examSize"]:checked')?.value || 'full';
     examState.examSize = selectedSize;
     
-    // Select questions with YDS distribution
-    examState.questions = selectQuestionsWithYDSDistribution(allQuestions, selectedSize);
+    const startBtn = document.getElementById('startExam');
+    startBtn.disabled = true;
+    startBtn.textContent = 'Sorular yükleniyor...';
     
-    // Set time limit based on exam size
-    examState.totalTime = window.Constants.EXAM_TIME_LIMITS[selectedSize];
-    examState.answers = new Array(examState.questions.length).fill(null);
-    examState.currentIndex = 0;
-    examState.timeRemaining = examState.totalTime;
-    examState.startTime = Date.now();
+    try {
+        const distribution = window.Constants.YDS_DISTRIBUTION[selectedSize];
+        const data = await window.API.Questions.getQuestionsForExam(selectedSize, distribution);
+        
+        examState.questions = shuffleArray(data.questions.map(q => ({ ...q, options: parseOptions(q.options) })));
+        examState.totalTime = window.Constants.EXAM_TIME_LIMITS[selectedSize];
+        examState.answers = new Array(examState.questions.length).fill(null);
+        examState.currentIndex = 0;
+        examState.timeRemaining = examState.totalTime;
+        examState.startTime = Date.now();
 
-    document.getElementById('exam-setup').classList.add('hidden');
-    document.getElementById('exam-area').classList.remove('hidden');
-    document.getElementById('exam-results').classList.add('hidden');
-    document.body.classList.add('quiz-active');
+        document.getElementById('exam-setup').classList.add('hidden');
+        document.getElementById('exam-area').classList.remove('hidden');
+        document.getElementById('exam-results').classList.add('hidden');
+        document.body.classList.add('quiz-active');
 
-    document.getElementById('examTotalQ').textContent = examState.questions.length;
-    
-    buildExamNavigation();
-    showExamQuestion();
-    startExamTimer();
+        document.getElementById('examTotalQ').textContent = examState.questions.length;
+        
+        buildExamNavigation();
+        showExamQuestion();
+        startExamTimer();
+    } catch (error) {
+        console.error('Failed to load exam questions:', error);
+        alert('Sınav soruları yüklenemedi. Lütfen tekrar deneyin.');
+    } finally {
+        startBtn.disabled = false;
+        startBtn.textContent = 'Sınavı Başlat';
+    }
 }
 
 function buildExamNavigation() {
@@ -3438,11 +3400,12 @@ function handleCopyRoomCode() {
     });
 }
 
-// Polling
-function startPolling() {
+// Polling — adaptive interval: aktif oyun 2sn, lobi 4sn
+function startPolling(intervalMs) {
     stopPolling();
+    const interval = intervalMs || (challengeState.roomData?.status === 'active' ? 2000 : 4000);
     pollRoomState();
-    challengeState.pollInterval = setInterval(pollRoomState, 2000);
+    challengeState.pollInterval = setInterval(pollRoomState, interval);
 }
 
 function stopPolling() {
@@ -3539,6 +3502,8 @@ function updateParticipantsList(participants) {
 
 function startChallengeGame(data) {
     showChallengeView('challenge-game');
+    // Oyun başladı — polling'i 2sn'ye düşür
+    startPolling(2000);
     challengeState.currentQuestionIndex = data.room.current_question_index;
     challengeState.correctCount = 0;
     challengeState.wrongCount = 0;

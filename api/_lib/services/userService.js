@@ -1,4 +1,4 @@
-const { query } = require('../db');
+const { query, transaction } = require('../db');
 
 class UserService {
     async updateStats(userId, { totalAnswered, totalCorrect, totalWrong, streakDays }) {
@@ -247,6 +247,49 @@ class UserService {
                 stats: statsResult.rows[0] || null
             }
         };
+    }
+    
+    // Batch sync — tek transaction'da birden fazla veri türünü kaydet
+    async batchSync(userId, { answerHistory, wrongAnswers, dailyStats }) {
+        return transaction(async (client) => {
+            // Answer history batch
+            if (answerHistory && answerHistory.length > 0) {
+                for (const item of answerHistory) {
+                    await client.query(`
+                        INSERT INTO user_answer_history (user_id, question_hash, question_text, category, user_answer, is_correct)
+                        VALUES ($1, $2, $3, $4, $5, $6)
+                        ON CONFLICT (user_id, question_hash) 
+                        DO UPDATE SET user_answer = $5, is_correct = $6, 
+                                      attempt_count = user_answer_history.attempt_count + 1,
+                                      updated_at = CURRENT_TIMESTAMP
+                    `, [userId, item.questionHash, item.questionText, item.category, item.userAnswer, item.isCorrect]);
+                }
+            }
+            
+            // Wrong answers batch
+            if (wrongAnswers && wrongAnswers.length > 0) {
+                for (const item of wrongAnswers) {
+                    await client.query(`
+                        INSERT INTO user_wrong_answers (user_id, question_text, category, user_answer, correct_answer)
+                        VALUES ($1, $2, $3, $4, $5)
+                        ON CONFLICT (user_id, question_text) 
+                        DO UPDATE SET user_answer = $4, updated_at = CURRENT_TIMESTAMP
+                    `, [userId, item.questionText, item.category, item.userAnswer, item.correctAnswer]);
+                }
+            }
+            
+            // Daily stats
+            if (dailyStats) {
+                await client.query(`
+                    INSERT INTO user_daily_stats (user_id, date, answered, correct)
+                    VALUES ($1, $2, $3, $4)
+                    ON CONFLICT (user_id, date) 
+                    DO UPDATE SET answered = $3, correct = $4
+                `, [userId, dailyStats.date, dailyStats.answered, dailyStats.correct]);
+            }
+            
+            return { synced: true };
+        });
     }
 }
 

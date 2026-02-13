@@ -23,6 +23,29 @@ class QuestionController {
         
         sendSuccess(res, { question });
     }
+    
+    // Quiz için sunucu tarafında soru seçimi
+    async getQuestionsForQuiz(req, res) {
+        const { category, limit, shuffle } = req.body;
+        const questions = await questionService.getQuestionsForQuiz({
+            category: category || 'all',
+            limit: limit || 'all',
+            shuffle: shuffle !== false
+        });
+        sendSuccess(res, { questions });
+    }
+    
+    // Sınav modu için YDS dağılımlı soru seçimi
+    async getQuestionsForExam(req, res) {
+        const { examSize, distribution } = req.body;
+        
+        if (!distribution || typeof distribution !== 'object') {
+            return sendError(res, 'Soru dağılımı gerekli', 400);
+        }
+        
+        const questions = await questionService.getQuestionsForExam(examSize, distribution);
+        sendSuccess(res, { questions });
+    }
 }
 
 module.exports = new QuestionController();

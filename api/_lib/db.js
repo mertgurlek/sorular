@@ -7,12 +7,13 @@ function getPool() {
         const dbUrl = process.env.DATABASE_URL || '';
         const isLocalDb = dbUrl.includes('localhost') || dbUrl.includes('127.0.0.1');
         
+        const isServerless = !!process.env.VERCEL;
         pool = new Pool({
             connectionString: dbUrl,
             ssl: isLocalDb ? false : { rejectUnauthorized: false },
-            max: 10,
-            idleTimeoutMillis: 30000,
-            connectionTimeoutMillis: 2000
+            max: isServerless ? 5 : 10,
+            idleTimeoutMillis: isServerless ? 10000 : 30000,
+            connectionTimeoutMillis: 5000
         });
 
         pool.on('error', (err) => {

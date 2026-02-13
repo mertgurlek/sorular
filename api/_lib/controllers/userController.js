@@ -169,6 +169,15 @@ class UserController {
         await userService.removeLearnedWord(userId, expression);
         sendSuccess(res);
     }
+    
+    // Batch sync — tek istekte birden fazla veri türünü kaydet
+    async batchSync(req, res) {
+        const { userId } = req.params;
+        const { answerHistory, wrongAnswers, dailyStats } = req.body;
+        
+        await userService.batchSync(userId, { answerHistory, wrongAnswers, dailyStats });
+        sendSuccess(res, { message: 'Batch sync tamamlandı' });
+    }
 }
 
 module.exports = new UserController();

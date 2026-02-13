@@ -103,4 +103,9 @@ router.delete('/:userId/learned-words/:expression', asyncHandler(async (req, res
     await userController.removeLearnedWord(req, res);
 }));
 
+// Batch sync — tek istekte birden fazla veri türünü kaydet
+router.post('/:userId/batch-sync', asyncHandler(async (req, res) => {
+    await userController.batchSync(req, res);
+}));
+
 module.exports = router;

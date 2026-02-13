@@ -108,7 +108,34 @@ body {
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
     -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
     padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+/* Performans: Quiz alanlarında layout containment */
+.question-container {
+    contain: content;
+}
+
+/* Azaltılmış hareket tercihi — animasyonları kapat */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* Düşük güçlü cihazlarda backdrop-filter azalt */
+@media (max-width: 768px) {
+    .card,
+    .quiz-header,
+    .question-text,
+    .option,
+    .tabs {
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+    }
 }
 
 html {
