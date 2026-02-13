@@ -117,6 +117,22 @@ html {
     overflow-x: hidden;
 }
 
+/* Selection color */
+::selection {
+    background: var(--accent);
+    color: white;
+}
+
+/* Global focus-visible for keyboard navigation */
+:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+:focus:not(:focus-visible) {
+    outline: none;
+}
+
 /* ==================== AUTH SCREEN ==================== */
 .auth-screen {
     min-height: 100vh;
@@ -358,6 +374,8 @@ body.dark-mode::before {
     gap: 8px;
     position: relative;
     overflow: hidden;
+    z-index: 0;
+    isolation: isolate;
 }
 
 .btn::before {
@@ -369,10 +387,14 @@ body.dark-mode::before {
     height: 100%;
     background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
     transition: left 0.5s;
+    z-index: 0;
+    pointer-events: none;
 }
 
-.btn:hover::before {
-    left: 100%;
+@media (hover: hover) {
+    .btn:hover::before {
+        left: 100%;
+    }
 }
 
 .btn-primary {
@@ -381,9 +403,11 @@ body.dark-mode::before {
     box-shadow: 0 4px 15px var(--accent-glow);
 }
 
-.btn-primary:hover:not(:disabled) {
-    transform: translateY(-3px);
-    box-shadow: 0 8px 25px var(--accent-glow);
+@media (hover: hover) {
+    .btn-primary:hover:not(:disabled) {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 25px var(--accent-glow);
+    }
 }
 
 .btn-primary:active:not(:disabled) {
@@ -396,16 +420,26 @@ body.dark-mode::before {
     box-shadow: none;
 }
 
+.btn:disabled {
+    pointer-events: none;
+}
+
+.btn:disabled::before {
+    display: none;
+}
+
 .btn-secondary {
     background: var(--option-bg);
     color: var(--text-primary);
     border: 1px solid var(--border);
 }
 
-.btn-secondary:hover {
-    background: var(--option-hover);
-    border-color: var(--accent);
-    transform: translateY(-2px);
+@media (hover: hover) {
+    .btn-secondary:hover {
+        background: var(--option-hover);
+        border-color: var(--accent);
+        transform: translateY(-2px);
+    }
 }
 
 .btn-danger {
@@ -414,9 +448,11 @@ body.dark-mode::before {
     box-shadow: 0 4px 15px rgba(255, 118, 117, 0.3);
 }
 
-.btn-danger:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(255, 118, 117, 0.4);
+@media (hover: hover) {
+    .btn-danger:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(255, 118, 117, 0.4);
+    }
 }
 
 .btn-icon {
@@ -431,9 +467,11 @@ body.dark-mode::before {
     box-shadow: var(--shadow);
 }
 
-.btn-icon:hover {
-    transform: rotate(15deg) scale(1.1);
-    background: var(--option-hover);
+@media (hover: hover) {
+    .btn-icon:hover {
+        transform: rotate(15deg) scale(1.1);
+        background: var(--option-hover);
+    }
 }
 
 .btn-small {
@@ -514,8 +552,10 @@ body:not(.dark-mode) .icon-moon { display: none; }
     max-width: 100%;
 }
 
-.card:hover {
-    box-shadow: var(--shadow), var(--shadow-glow);
+@media (hover: hover) {
+    .card:hover {
+        box-shadow: var(--shadow), var(--shadow-glow);
+    }
 }
 
 .hidden {
@@ -557,10 +597,12 @@ body:not(.dark-mode) .icon-moon { display: none; }
     transition: opacity 0.3s;
 }
 
-.category-btn:hover {
-    transform: translateY(-4px);
-    border-color: var(--accent);
-    box-shadow: 0 8px 25px var(--accent-glow);
+@media (hover: hover) {
+    .category-btn:hover {
+        transform: translateY(-4px);
+        border-color: var(--accent);
+        box-shadow: 0 8px 25px var(--accent-glow);
+    }
 }
 
 .category-btn.selected {
@@ -836,11 +878,13 @@ body:not(.dark-mode) .icon-moon { display: none; }
     cursor: pointer;
 }
 
-.option:hover:not(.disabled) {
-    border-color: var(--accent);
-    background: var(--option-hover);
-    transform: translateX(8px);
-    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+@media (hover: hover) {
+    .option:hover:not(.disabled) {
+        border-color: var(--accent);
+        background: var(--option-hover);
+        transform: translateX(8px);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    }
 }
 
 /* Seçim Butonu */
@@ -914,6 +958,11 @@ body:not(.dark-mode) .icon-moon { display: none; }
     color: white;
 }
 
+.option.disabled {
+    cursor: default;
+    pointer-events: none;
+}
+
 .option.disabled .option-select-btn {
     cursor: not-allowed;
     opacity: 0.7;
@@ -922,6 +971,7 @@ body:not(.dark-mode) .icon-moon { display: none; }
 .feedback {
     padding: 24px;
     border-radius: var(--radius);
+    margin-top: 16px;
     margin-bottom: 24px;
     text-align: center;
     font-weight: 600;
@@ -1152,9 +1202,11 @@ body:not(.dark-mode) .icon-moon { display: none; }
     max-width: 100%;
 }
 
-.question-item:hover {
-    transform: translateX(6px);
-    box-shadow: var(--shadow);
+@media (hover: hover) {
+    .question-item:hover {
+        transform: translateX(6px);
+        box-shadow: var(--shadow);
+    }
 }
 
 .question-item .category-tag {
@@ -1222,9 +1274,11 @@ body:not(.dark-mode) .icon-moon { display: none; }
     transition: all 0.3s ease;
 }
 
-.word-tag:hover {
-    transform: scale(1.05);
-    box-shadow: 0 6px 18px rgba(253, 203, 110, 0.4);
+@media (hover: hover) {
+    .word-tag:hover {
+        transform: scale(1.05);
+        box-shadow: 0 6px 18px rgba(253, 203, 110, 0.4);
+    }
 }
 
 .word-tag .remove {
@@ -1454,9 +1508,11 @@ body:not(.dark-mode) .icon-moon { display: none; }
     transition: all 0.3s ease;
 }
 
-.stat-card:hover {
-    transform: translateY(-4px);
-    box-shadow: var(--shadow-glow);
+@media (hover: hover) {
+    .stat-card:hover {
+        transform: translateY(-4px);
+        box-shadow: var(--shadow-glow);
+    }
 }
 
 .stat-value {
@@ -1561,10 +1617,12 @@ body:not(.dark-mode) .icon-moon { display: none; }
     transition: all 0.3s ease;
 }
 
-.exam-option-card:hover {
-    transform: translateY(-4px);
-    box-shadow: var(--shadow-glow);
-    border-color: var(--accent);
+@media (hover: hover) {
+    .exam-option-card:hover {
+        transform: translateY(-4px);
+        box-shadow: var(--shadow-glow);
+        border-color: var(--accent);
+    }
 }
 
 .exam-option-icon {
@@ -1792,11 +1850,6 @@ body:not(.dark-mode) .icon-moon { display: none; }
         min-height: 56px;
     }
     
-    /* Disable hover translateX on touch devices - bad UX */
-    .option:hover:not(.disabled) {
-        transform: none;
-    }
-    
     .option:active:not(.disabled) {
         transform: scale(0.98);
         transition-duration: 0.1s;
@@ -1817,18 +1870,6 @@ body:not(.dark-mode) .icon-moon { display: none; }
     .btn:active:not(:disabled) {
         transform: scale(0.96);
         transition-duration: 0.1s;
-    }
-    
-    .btn-primary:hover:not(:disabled) {
-        transform: none;
-    }
-    
-    .btn-primary:active:not(:disabled) {
-        transform: scale(0.96);
-    }
-    
-    .btn-secondary:hover {
-        transform: none;
     }
     
     .btn-small {
@@ -1894,17 +1935,26 @@ body:not(.dark-mode) .icon-moon { display: none; }
         width: 100%;
     }
     
+    /* ===== QUIZ-ACTIVE: HIDE HEADER & TABS TO MAXIMIZE QUIZ AREA ===== */
+    body.quiz-active .header {
+        display: none !important;
+    }
+    
+    body.quiz-active .tabs {
+        display: none !important;
+    }
+    
     /* ===== VIEWPORT-FIT QUIZ LAYOUT FOR MOBILE ===== */
     /* Uses --vh from JS for real viewport height on mobile browsers */
     
-    /* Quiz card: flex column, fill viewport minus header/tabs */
+    /* Quiz card: flex column, fill viewport minus container padding only */
     #quiz-area.card,
     #exam-area.card,
     #challenge-game.card {
         display: flex;
         flex-direction: column;
-        /* Use JS-measured height: subtract header(~70) + tabs(~50) + container padding(~16) */
-        max-height: calc(var(--app-height, 100vh) - 130px);
+        /* Header & tabs hidden when quiz-active, so only subtract container padding */
+        max-height: calc(var(--app-height, 100vh) - 20px);
         padding: 10px 10px 0;
         overflow: hidden;
     }
@@ -2001,11 +2051,11 @@ body:not(.dark-mode) .icon-moon { display: none; }
         padding-top: 2px;
     }
     
-    /* Feedback compact */
+    /* Feedback compact — inside scrollable question-container */
     .feedback {
         padding: 10px 12px;
+        margin-top: 8px;
         margin-bottom: 4px;
-        flex-shrink: 0;
     }
     
     .feedback.correct p,
@@ -2088,10 +2138,6 @@ body:not(.dark-mode) .icon-moon { display: none; }
     .category-btn {
         padding: 16px 14px;
         font-size: 0.95rem;
-    }
-    
-    .category-btn:hover {
-        transform: none;
     }
     
     .category-btn:active {
@@ -2236,12 +2282,7 @@ body:not(.dark-mode) .icon-moon { display: none; }
         font-size: 1.8rem;
     }
     
-    /* Disable hover effects on touch */
-    .stat-card:hover,
-    .question-item:hover,
-    .word-tag:hover {
-        transform: none;
-    }
+    /* hover effects handled by @media (hover: hover) globally */
     
     /* Challenge mode */
     .challenge-mode-selector {
@@ -3044,10 +3085,12 @@ body:not(.dark-mode) .icon-moon { display: none; }
     text-align: center;
 }
 
-.exam-size-card:hover {
-    background: var(--option-hover);
-    border-color: var(--accent);
-    transform: translateY(-2px);
+@media (hover: hover) {
+    .exam-size-card:hover {
+        background: var(--option-hover);
+        border-color: var(--accent);
+        transform: translateY(-2px);
+    }
 }
 
 .exam-size-option input[type="radio"]:checked + .exam-size-card {
@@ -3225,11 +3268,11 @@ body:not(.dark-mode) .icon-moon { display: none; }
         font-size: 0.85rem;
     }
     
-    /* Even more compact quiz card - less header/tabs space to subtract */
+    /* Quiz card: header/tabs hidden via quiz-active, only subtract container padding */
     #quiz-area.card,
     #exam-area.card,
     #challenge-game.card {
-        max-height: calc(var(--app-height, 100vh) - 110px);
+        max-height: calc(var(--app-height, 100vh) - 16px);
         padding: 8px 8px 0;
     }
     
@@ -3301,6 +3344,7 @@ body:not(.dark-mode) .icon-moon { display: none; }
     
     .feedback {
         padding: 8px 10px;
+        margin-top: 6px;
         margin-bottom: 2px;
     }
     
@@ -3417,6 +3461,23 @@ body:not(.dark-mode) .icon-moon { display: none; }
         width: 100%;
         justify-content: center;
     }
+}
+
+/* ==================== QUESTION CATEGORY BADGE ==================== */
+.question-category-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    background: var(--gradient-primary);
+    color: white;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-bottom: 6px;
+    letter-spacing: 0.3px;
+}
+
+.question-category-badge:empty {
+    display: none;
 }
 
 /* ==================== ANSWER HISTORY INDICATOR ==================== */
@@ -3684,11 +3745,13 @@ body:not(.dark-mode) .icon-moon { display: none; }
     text-align: center;
 }
 
-.challenge-action-card:hover {
-    background: var(--option-hover);
-    border-color: var(--accent);
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-glow);
+@media (hover: hover) {
+    .challenge-action-card:hover {
+        background: var(--option-hover);
+        border-color: var(--accent);
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-glow);
+    }
 }
 
 .challenge-action-icon {
@@ -4554,11 +4617,11 @@ body:not(.dark-mode) .icon-moon { display: none; }
         grid-template-columns: 1fr;
     }
     
-    /* Quiz card: tighter viewport fit */
+    /* Quiz card: header/tabs hidden, nearly full viewport */
     #quiz-area.card,
     #exam-area.card,
     #challenge-game.card {
-        max-height: calc(var(--app-height, 100vh) - 90px);
+        max-height: calc(var(--app-height, 100vh) - 12px);
         padding: 6px 6px 0;
     }
     
@@ -4619,6 +4682,7 @@ body:not(.dark-mode) .icon-moon { display: none; }
     
     .feedback {
         padding: 6px 8px;
+        margin-top: 4px;
     }
     
     .feedback.correct p,
@@ -4860,13 +4924,13 @@ body:not(.dark-mode) .icon-moon { display: none; }
         padding: 8px;
     }
     
-    /* Quiz viewport fit for landscape */
+    /* Quiz viewport fit for landscape - header/tabs hidden */
     #quiz-area.card,
     #exam-area.card,
     #challenge-game.card {
         display: flex;
         flex-direction: column;
-        max-height: calc(var(--app-height, 100vh) - 70px);
+        max-height: calc(var(--app-height, 100vh) - 12px);
         padding: 4px 6px 0;
         overflow: hidden;
     }

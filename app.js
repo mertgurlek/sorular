@@ -585,6 +585,7 @@ function startQuiz() {
     document.getElementById('category-selection').classList.add('hidden');
     document.getElementById('quiz-area').classList.remove('hidden');
     document.getElementById('quiz-results').classList.add('hidden');
+    document.body.classList.add('quiz-active');
 
     document.getElementById('totalQuestions').textContent = currentQuiz.questions.length;
     showQuestion();
@@ -599,6 +600,12 @@ function showQuestion() {
     
     const progress = ((currentQuiz.currentIndex) / currentQuiz.questions.length) * 100;
     document.getElementById('progressFill').style.width = `${progress}%`;
+
+    // Show question category
+    const categoryBadge = document.getElementById('questionCategory');
+    if (categoryBadge) {
+        categoryBadge.textContent = q.category || '';
+    }
 
     // Show previous answer history if exists
     const questionHistory = getQuestionHistory(q);
@@ -882,6 +889,11 @@ function timeUp() {
         ${gptButton}
     `;
     
+    // Auto-scroll to feedback
+    setTimeout(() => {
+        feedback.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+    
     // Save wrong answer
     saveWrongAnswer(q, 'TIMEOUT');
     
@@ -981,6 +993,11 @@ function selectAnswer(letter) {
         // }
     }
 
+    // Auto-scroll to feedback inside question-container
+    setTimeout(() => {
+        feedback.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+
     // Store user's answer for this question
     currentQuiz.userAnswers[currentQuiz.currentIndex] = { letter, isCorrect };
 
@@ -1016,6 +1033,7 @@ function nextQuestion() {
 function showResults() {
     document.getElementById('quiz-area').classList.add('hidden');
     document.getElementById('quiz-results').classList.remove('hidden');
+    document.body.classList.remove('quiz-active');
 
     const total = currentQuiz.correct + currentQuiz.wrong;
     const percentage = total > 0 ? Math.round((currentQuiz.correct / total) * 100) : 0;
@@ -1038,6 +1056,7 @@ function exitQuiz() {
         stopTimer();
         restartQuiz();
         document.getElementById('quiz-area').classList.add('hidden');
+        document.body.classList.remove('quiz-active');
     }
 }
 
@@ -1889,6 +1908,7 @@ function startExam() {
     document.getElementById('exam-setup').classList.add('hidden');
     document.getElementById('exam-area').classList.remove('hidden');
     document.getElementById('exam-results').classList.add('hidden');
+    document.body.classList.add('quiz-active');
 
     document.getElementById('examTotalQ').textContent = examState.questions.length;
     
@@ -2108,6 +2128,7 @@ function calculateExamResults() {
     // Display results
     document.getElementById('exam-area').classList.add('hidden');
     document.getElementById('exam-results').classList.remove('hidden');
+    document.body.classList.remove('quiz-active');
     
     document.getElementById('examScore').textContent = correct;
     document.getElementById('examPercentage').textContent = 

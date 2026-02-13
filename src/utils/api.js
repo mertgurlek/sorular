@@ -1,6 +1,9 @@
 // API Configuration
-const API_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-    ? 'http://localhost:3001/api' 
+// Local dev: if port is not 3001 (API server), redirect API calls to localhost:3001
+// Production (Vercel): use relative /api
+const API_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('127.'))
+    && window.location.port !== '3001'
+    ? 'http://localhost:3001/api'
     : '/api';
 
 // Generic fetch wrapper with error handling
