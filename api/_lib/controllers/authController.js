@@ -1,14 +1,27 @@
 const authService = require('../services/authService');
-const { validateRegistration, validateLogin } = require('../lib/validators');
-const { sendSuccess, sendError } = require('../lib/middleware');
+const { generateToken } = require('../authMiddleware');
+const { sendSuccess, sendError } = require('../middleware');
 
 class AuthController {
     async register(req, res) {
-        if (!validateRegistration(req, res)) {
-            return;
+        const { username, email, password } = req.body;
+        
+        if (!username || !email || !password) {
+            return sendError(res, 'Tüm alanları doldurun', 400);
         }
         
-        const { username, email, password } = req.body;
+        if (typeof username !== 'string' || username.length < 3 || username.length > 50) {
+            return sendError(res, 'Kullanıcı adı 3-50 karakter arası olmalı', 400);
+        }
+        
+        if (typeof password !== 'string' || password.length < 6 || password.length > 128) {
+            return sendError(res, 'Şifre 6-128 karakter arası olmalı', 400);
+        }
+        
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (typeof email !== 'string' || !emailRegex.test(email) || email.length > 255) {
+            return sendError(res, 'Geçerli bir email adresi girin', 400);
+        }
         
         const exists = await authService.checkUserExists(username, email);
         if (exists) {
@@ -16,23 +29,25 @@ class AuthController {
         }
         
         const user = await authService.createUser(username, email, password);
+        const token = generateToken(user);
         
-        sendSuccess(res, {
+        res.status(201).json({
             message: 'Kayıt başarılı!',
+            token,
             user: {
                 id: user.id,
                 username: user.username,
                 email: user.email
             }
-        }, 201);
+        });
     }
     
     async login(req, res) {
-        if (!validateLogin(req, res)) {
-            return;
-        }
-        
         const { username, password } = req.body;
+        
+        if (!username || !password) {
+            return sendError(res, 'Kullanıcı adı ve şifre gerekli', 400);
+        }
         
         const user = await authService.findUserByUsername(username);
         if (!user) {
@@ -47,14 +62,16 @@ class AuthController {
         await authService.updateLastLogin(user.id);
         
         const userData = await authService.getUserWithStats(user.id);
+        const token = generateToken(user);
         
-        sendSuccess(res, {
+        res.json({
             message: 'Giriş başarılı!',
+            token,
             user: {
                 id: user.id,
                 username: user.username,
                 email: user.email,
-                stats: userData.stats
+                stats: userData ? userData.stats : null
             }
         });
     }
@@ -67,7 +84,10 @@ class AuthController {
             return sendError(res, 'Kullanıcı bulunamadı', 404);
         }
         
-        sendSuccess(res, userData);
+        res.json({
+            user: userData.user,
+            stats: userData.stats
+        });
     }
 }
 

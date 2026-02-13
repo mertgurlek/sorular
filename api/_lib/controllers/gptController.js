@@ -1,5 +1,5 @@
 const gptService = require('../services/gptService');
-const { sendSuccess, sendError } = require('../lib/middleware');
+const { sendSuccess, sendError } = require('../middleware');
 
 class GPTController {
     async saveExplanation(req, res) {

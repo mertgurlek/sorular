@@ -1,18 +1,23 @@
-# Python scraping ve cevap çıkarma dosyaları
-*.py
+# Python scripts ve config
+scripts/
 __pycache__/
+*.py
 .env
 requirements.txt
 
-# JSON veri dosyaları (quiz-app dışındakiler)
+# JSON veri dosyaları
 questions.json
 yds_all_questions.json
+word_frequency_results.json
+validation_summary.json
+quiz_presets.json
 yds_questions/
 yds_questions_gpt/
 
-# Debug ve test dosyaları
-after_submit.html
-debug_page.html
+# Dokümantasyon (deploy'a gerek yok)
+ARCHITECTURE.md
+REFACTORING_GUIDE.md
+README.md
 
 # Git
 .git/

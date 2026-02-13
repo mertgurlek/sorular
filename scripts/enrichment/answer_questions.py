@@ -1,12 +1,10 @@
 """questions.json dosyasındaki soruları GPT ile cevapla"""
 import json
 import asyncio
-from openai import AsyncOpenAI
-from dotenv import load_dotenv
-import os
 
-load_dotenv()
-client = AsyncOpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+from scripts.openai_utils import get_openai_client
+
+client = get_openai_client()
 
 async def get_answer(q):
     opts = '\n'.join([f"{o['letter']}) {o['text']}" for o in q['options']])

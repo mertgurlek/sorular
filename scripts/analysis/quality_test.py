@@ -2,38 +2,23 @@
 Rastgele 100 soru ile kalite testi
 """
 
-import psycopg2
-from psycopg2.extras import RealDictCursor
-from dotenv import load_dotenv
-import os
 import json
 
-load_dotenv()
-load_dotenv(".env.local")
+from scripts.db_utils import get_db_connection
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-if DATABASE_URL:
-    if DATABASE_URL.startswith("psql '"):
-        DATABASE_URL = DATABASE_URL[6:-1]
-    elif DATABASE_URL.startswith("psql "):
-        DATABASE_URL = DATABASE_URL[5:]
-    DATABASE_URL = DATABASE_URL.strip("'\"")
-
-conn = psycopg2.connect(DATABASE_URL)
-cur = conn.cursor(cursor_factory=RealDictCursor)
-
-# Rastgele 100 soru çek
-cur.execute("""
-    SELECT id, question_text, options, correct_answer, category,
-           question_tr, explanation_tr, tested_skill, difficulty, tip,
-           gpt_status, is_valid
-    FROM questions 
-    WHERE gpt_verified_at IS NOT NULL
-    ORDER BY RANDOM() 
-    LIMIT 100
-""")
-
-questions = cur.fetchall()
+with get_db_connection(use_dict_cursor=True) as conn:
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT id, question_text, options, correct_answer, category,
+               question_tr, explanation_tr, tested_skill, difficulty, tip,
+               gpt_status, is_valid
+        FROM questions 
+        WHERE gpt_verified_at IS NOT NULL
+        ORDER BY RANDOM() 
+        LIMIT 100
+    """)
+    questions = cur.fetchall()
+    cur.close()
 
 print("="*80)
 print("🔍 KALİTE TESTİ - Rastgele 100 Soru")
@@ -176,9 +161,6 @@ if stats["issues"]:
         print(f"   ... ve {len(stats['issues'])-10} soru daha")
 else:
     print(f"\n✅ Tüm sorular eksiksiz!")
-
-cur.close()
-conn.close()
 
 print("\n" + "="*80)
 print("✅ Kalite testi tamamlandı!")

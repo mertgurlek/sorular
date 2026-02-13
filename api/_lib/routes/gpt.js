@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const gptController = require('../controllers/gptController');
-const { asyncHandler } = require('../lib/middleware');
+const { asyncHandler } = require('../middleware');
 
 router.post('/gpt-explanation', asyncHandler(async (req, res) => {
     await gptController.saveExplanation(req, res);

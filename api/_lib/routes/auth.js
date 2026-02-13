@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
-const { asyncHandler } = require('../lib/middleware');
+const { asyncHandler } = require('../middleware');
 
 router.post('/register', asyncHandler(async (req, res) => {
     await authController.register(req, res);

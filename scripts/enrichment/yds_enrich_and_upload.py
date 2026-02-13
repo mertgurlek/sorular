@@ -20,129 +20,18 @@ import os
 import sys
 import time
 from datetime import datetime
-from openai import AsyncOpenAI
 from psycopg2.extras import Json
 
 sys.stdout.reconfigure(line_buffering=True)
 
-from scripts.config import get_database_url, get_openai_key
+from scripts.config import get_database_url
 from scripts.db_utils import get_db_connection, execute_query, check_question_exists
+from scripts.constants import YDS_FILES
+from scripts.openai_utils import enrich_question
 
-client = AsyncOpenAI(api_key=get_openai_key())
 DATABASE_URL = get_database_url()
 
 CONCURRENT_LIMIT = 10  # Daha hızlı işlem için artırıldı
-
-# Görseldeki kategoriler
-YDS_FILES = [
-    ("yds_questions/grammar_revision.json", "YDS Gramer"),
-    ("yds_questions/yds_ilgisiz_cümleyi_bulma.json", "YDS İlgisiz Cümleyi Bulma"),
-    ("yds_questions/yds_çeviri_soruları.json", "YDS Çeviri Soruları"),
-    ("yds_questions/yds_cümle_tamamlama.json", "YDS Cümle Tamamlama"),
-    ("yds_questions/yds_diyalog.json", "YDS Diyalog"),
-    ("yds_questions/yds_durum.json", "YDS Durum"),
-    ("yds_questions/yds_eş_anlam.json", "YDS Eş Anlam"),
-    ("yds_questions/yds_paragraf_doldurma.json", "YDS Paragraf Doldurma"),
-    ("yds_questions/yds_phrasal_verbs_prepositions.json", "YDS Phrasal Verbs / Prepositions"),
-    ("yds_questions/yds_kelime_soruları.json", "YDS Kelime Soruları"),
-    ("yds_questions/yds_okuma_soruları.json", "YDS Reading Passages"),
-]
-
-CATEGORY_PROMPTS = {
-    "YDS Gramer": "genel İngilizce dilbilgisi becerisini (tenses, modals, clauses vb.)",
-    "YDS Cümle Tamamlama": "cümle tamamlama becerisini (yarım bırakılmış cümleyi anlam ve dilbilgisi açısından en uygun şekilde tamamlama)",
-    "YDS Diyalog": "diyalog tamamlama becerisini (konuşma akışına uygun cevap/soru bulma)",
-    "YDS Durum": "duruma uygun ifade seçme becerisini (verilen durumda söylenebilecek en uygun cümle)",
-    "YDS Eş Anlam": "eş anlam/yakın anlam bulma becerisini (cümledeki altı çizili ifadeye en yakın anlamlı seçenek)",
-    "YDS İlgisiz Cümleyi Bulma": "paragraf bütünlüğünü bozan ilgisiz cümleyi bulma becerisini",
-    "YDS Kelime Soruları": "kelime bilgisini (boşluğa en uygun kelimeyi seçme)",
-    "YDS Reading Passages": "okuduğunu anlama becerisini (paragraf/metin sorularını yanıtlama)",
-    "YDS Paragraf Doldurma": "paragraf tamamlama becerisini (boşluğa en uygun cümleyi yerleştirme)",
-    "YDS Phrasal Verbs / Prepositions": "phrasal verb ve preposition bilgisini",
-    "YDS Çeviri Soruları": "çeviri becerisini (İngilizce-Türkçe veya Türkçe-İngilizce çeviri)",
-}
-
-
-def get_system_prompt(category: str) -> str:
-    skill = CATEGORY_PROMPTS.get(category, "İngilizce dil bilgisini")
-    return f"""Sen YDS/YÖKDİL sınav uzmanısın. Bu soru {skill} sınamaktadır.
-
-Görevin:
-1. Soruyu ve şıkları dikkatlice incele
-2. DOĞRU CEVABI BUL ve açıkla
-3. Soru metnini Türkçeye çevir
-4. Detaylı Türkçe açıklama yaz
-
-MUTLAKA aşağıdaki JSON formatında yanıt ver:
-{{
-    "correct_answer": "A/B/C/D/E",
-    "question_tr": "soru metninin Türkçe çevirisi",
-    "explanation_tr": "Türkçe detaylı açıklama (neden bu cevap doğru, diğerleri neden yanlış)",
-    "tested_skill": "sınanan spesifik beceri",
-    "difficulty": "easy" | "medium" | "hard",
-    "tip": "YDS/YÖKDİL için çözüm ipucu (Türkçe)"
-}}
-
-Sadece JSON döndür, başka bir şey yazma."""
-
-
-async def enrich_question(question: dict, category: str, semaphore: asyncio.Semaphore, index: int) -> dict:
-    """Tek bir soruyu GPT-4o-mini ile zenginleştir"""
-    
-    async with semaphore:
-        try:
-            q_text = question.get("question_text", "")
-            options = question.get("options", [])
-            
-            if not q_text:
-                return {**question, "error": "Soru metni boş", "enriched": False}
-            
-            options_text = "\n".join([f"{opt['letter']}) {opt['text']}" for opt in options])
-            
-            user_prompt = f"""Soru:
-{q_text}
-
-Şıklar:
-{options_text}
-
-Kategori: {category}"""
-
-            response = await client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": get_system_prompt(category)},
-                    {"role": "user", "content": user_prompt}
-                ],
-                temperature=0.2,
-                max_tokens=2000
-            )
-            
-            result_text = response.choices[0].message.content.strip()
-            
-            if result_text.startswith("```"):
-                result_text = result_text.split("```")[1]
-                if result_text.startswith("json"):
-                    result_text = result_text[4:]
-            result_text = result_text.strip()
-            
-            result = json.loads(result_text)
-            
-            return {
-                **question,
-                "correct_answer": result.get("correct_answer"),
-                "question_tr": result.get("question_tr", ""),
-                "explanation_tr": result.get("explanation_tr", ""),
-                "tested_skill": result.get("tested_skill", ""),
-                "difficulty": result.get("difficulty", "medium"),
-                "tip": result.get("tip", ""),
-                "enriched": True,
-                "gpt_processed_at": datetime.now().isoformat()
-            }
-            
-        except json.JSONDecodeError as e:
-            return {**question, "error": f"JSON parse error: {str(e)}", "enriched": False}
-        except Exception as e:
-            return {**question, "error": str(e), "enriched": False}
 
 
 def insert_to_db(questions: list, category: str) -> tuple:
@@ -267,8 +156,8 @@ async def process_category(file_path: str, category: str) -> dict:
         batch = to_process[batch_start:batch_start + batch_size]
         
         tasks = [
-            enrich_question(q, category, semaphore, idx)
-            for idx, q in batch
+            enrich_question(q, category, semaphore)
+            for _, q in batch
         ]
         
         results = await asyncio.gather(*tasks)

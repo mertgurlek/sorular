@@ -1,5 +1,5 @@
 const questionService = require('../services/questionService');
-const { sendSuccess, sendError } = require('../lib/middleware');
+const { sendSuccess, sendError } = require('../middleware');
 
 class QuestionController {
     async getCategories(req, res) {

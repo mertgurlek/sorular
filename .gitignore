@@ -5,6 +5,11 @@ __pycache__/
 node_modules/
 
 .vercel
-
-# Local Netlify folder
 .netlify
+
+# Büyük veri/çıktı dosyaları
+yds_all_questions.json
+word_frequency_results.json
+validation_summary.json
+quiz_presets.json
+questions.json

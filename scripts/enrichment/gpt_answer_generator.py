@@ -1,13 +1,10 @@
 import asyncio
 import json
-import os
-from openai import AsyncOpenAI
-from dotenv import load_dotenv
 from datetime import datetime
 
-load_dotenv()
+from scripts.openai_utils import get_openai_client, parse_gpt_response
 
-client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = get_openai_client()
 
 # Yeni kategorilerdeki dosyalar (yds_ prefix ile başlayanlar)
 CATEGORY_FILES = [
@@ -77,15 +74,7 @@ Sadece JSON döndür, başka bir şey yazma."""
             )
             
             result_text = response.choices[0].message.content.strip()
-            
-            # JSON parse et
-            if result_text.startswith("```"):
-                result_text = result_text.split("```")[1]
-                if result_text.startswith("json"):
-                    result_text = result_text[4:]
-            result_text = result_text.strip()
-            
-            result = json.loads(result_text)
+            result = parse_gpt_response(result_text)
             
             # Sonuçları soruya ekle
             question["corrected_question"] = result.get("corrected_question", q_text)

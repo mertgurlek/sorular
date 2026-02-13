@@ -2,12 +2,10 @@
 import json
 import glob
 import asyncio
-from openai import AsyncOpenAI
-from dotenv import load_dotenv
-import os
 
-load_dotenv()
-client = AsyncOpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+from scripts.openai_utils import get_openai_client
+
+client = get_openai_client()
 
 def find_unanswered():
     """Cevapsız soruları bul"""

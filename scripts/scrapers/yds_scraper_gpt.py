@@ -4,13 +4,11 @@ import json
 import re
 import os
 from datetime import datetime
-from openai import AsyncOpenAI
-from dotenv import load_dotenv
 
-load_dotenv()
+from scripts.openai_utils import get_openai_client
 
 # OpenAI async client
-client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = get_openai_client()
 
 # GPT rate limiting - OpenAI Tier 1: 500 RPM için optimize
 GPT_CONCURRENT_LIMIT = 50

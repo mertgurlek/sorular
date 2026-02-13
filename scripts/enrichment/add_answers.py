@@ -1,13 +1,10 @@
 import json
-import os
 import asyncio
-from openai import AsyncOpenAI
-from dotenv import load_dotenv
 from datetime import datetime
 
-load_dotenv()
+from scripts.openai_utils import get_openai_client
 
-client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = get_openai_client()
 
 CONCURRENT_LIMIT = 10  # Aynı anda max 10 GPT çağrısı
 

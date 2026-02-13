@@ -6,12 +6,10 @@ import os
 import re
 from datetime import datetime
 from playwright.async_api import async_playwright
-from openai import AsyncOpenAI
-from dotenv import load_dotenv
 
-load_dotenv()
+from scripts.openai_utils import get_openai_client
 
-client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = get_openai_client()
 
 async def scrape_single_question(page) -> dict:
     """Tek bir soru sayfasını kazır - ana scraper ile aynı selector'lar"""

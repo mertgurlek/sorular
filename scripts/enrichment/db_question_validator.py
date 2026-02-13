@@ -13,141 +13,22 @@ import json
 import os
 import time
 from datetime import datetime
-from openai import AsyncOpenAI
 from psycopg2.extras import RealDictCursor
 
-from scripts.config import get_database_url, get_openai_key
+from scripts.config import get_database_url
 from scripts.db_utils import get_db_connection, execute_query, db_manager
+from scripts.openai_utils import validate_question as _validate_question
 
-client = AsyncOpenAI(api_key=get_openai_key())
 DATABASE_URL = get_database_url()
 
 CONCURRENT_LIMIT = 5
 BATCH_SIZE = 10
 
-CATEGORY_PROMPTS = {
-    "Adjectives Adverbs": "sıfat ve zarf kullanımını (comparatives, superlatives, so/such, too/enough yapıları)",
-    "Conjunctions": "bağlaç kullanımını (and, but, or, so, because, although, however, therefore vb.)",
-    "Gerunds Infinitives": "gerund (-ing) ve infinitive (to + verb) kullanımını",
-    "Grammar Revision": "genel İngilizce gramer bilgisini (karma gramer konuları)",
-    "If Clauses": "koşul cümlelerini (Type 0, 1, 2, 3 ve mixed conditionals)",
-    "Modals": "modal fiilleri (can, could, may, might, must, should, would, will vb.)",
-    "Nouns": "isim kullanımını (countable/uncountable, articles, quantifiers)",
-    "Noun Clauses": "isim cümleciklerini (that-clause, wh-clause, if/whether clause)",
-    "Passive": "edilgen yapıyı (passive voice - tüm zamanlar)",
-    "Reductions": "cümle kısaltmalarını (reduced relative clauses, reduced adverbial clauses)",
-    "Relative Clauses": "sıfat cümleciklerini (who, which, that, whose, where, when)",
-    "Tenses": "İngilizce zaman kiplerini (present, past, future - simple, continuous, perfect)",
-    "Cümle Tamamlama": "cümle tamamlama becerisini (yarım cümleyi anlamlı şekilde tamamlama)",
-    "Okuma Soruları": "okuduğunu anlama becerisini (reading comprehension)",
-    "Çeviri Soruları": "İngilizce-Türkçe çeviri becerisini",
-    "Diyalog": "diyalog tamamlama becerisini (konuşma bağlamını anlama)",
-    "Durum": "durum ifade etme becerisini (verilen duruma uygun cümle seçme)",
-    "Eş Anlam": "eş anlamlı cümle bulma becerisini (paraphrasing)",
-    "İlgisiz Cümleyi Bulma": "paragraf tutarlılığını anlama becerisini",
-    "Paragraf Doldurma": "paragraf tamamlama becerisini",
-    "Phrasal Verbs Prepositions": "phrasal verb ve edat kullanımını",
-    "Kelime Soruları": "kelime bilgisini (vocabulary)"
-}
-
-def get_category_prompt(category: str) -> str:
-    """Kategori için özelleştirilmiş prompt döndürür"""
-    skill = CATEGORY_PROMPTS.get(category, "İngilizce dil bilgisini")
-    return f"""Bu bir YDS/YÖKDİL sınavına hazırlık sorusudur. Bu soru {skill} sınamaktadır.
-
-Görevin:
-1. Soruyu ve şıkları dikkatlice incele
-2. Yazım/imla hatası varsa düzelt
-3. Soru tamamen hatalı veya çözülemez ise, AYNI KONUYU sınayan yeni bir soru oluştur
-4. Doğru cevabı belirle ve açıkla
-
-MUTLAKA aşağıdaki JSON formatında yanıt ver:
-{{
-    "status": "valid" | "corrected" | "regenerated",
-    "is_valid": true | false,
-    "question_text": "düzeltilmiş veya yeni soru metni",
-    "options": [
-        {{"letter": "A", "text": "şık metni"}},
-        {{"letter": "B", "text": "şık metni"}},
-        {{"letter": "C", "text": "şık metni"}},
-        {{"letter": "D", "text": "şık metni"}},
-        {{"letter": "E", "text": "şık metni"}}
-    ],
-    "correct_answer": "A/B/C/D/E",
-    "question_tr": "soru metninin Türkçe çevirisi",
-    "explanation_tr": "Türkçe detaylı açıklama (neden bu cevap doğru, diğerleri neden yanlış)",
-    "tested_skill": "sınanan spesifik dilbilgisi konusu (örn: Present Perfect vs Past Simple)",
-    "difficulty": "easy" | "medium" | "hard",
-    "tip": "YDS/YÖKDİL için çözüm ipucu (Türkçe)"
-}}
-
-Sadece JSON döndür, başka bir şey yazma."""
-
 
 async def validate_question(question: dict, category: str, semaphore: asyncio.Semaphore) -> dict:
-    """Tek bir soruyu GPT-4o ile doğrula ve zenginleştir"""
-    
-    async with semaphore:
-        try:
-            q_text = question.get("question_text", "")
-            options = parse_options_from_jsonb(question.get("options", []))
-            
-            if not q_text:
-                return {**question, "error": "Soru metni boş", "processed": False}
-            
-            options_text = "\n".join([f"{opt['letter']}) {opt['text']}" for opt in options])
-            current_answer = question.get("correct_answer", "Belirtilmemiş")
-            
-            user_prompt = f"""Soru:
-{q_text}
-
-Şıklar:
-{options_text}
-
-Mevcut doğru cevap: {current_answer}
-Kategori: {category}"""
-
-            response = await client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": get_category_prompt(category)},
-                    {"role": "user", "content": user_prompt}
-                ],
-                temperature=0.2,
-                max_tokens=2000
-            )
-            
-            result_text = response.choices[0].message.content.strip()
-            
-            if result_text.startswith("```"):
-                result_text = result_text.split("```")[1]
-                if result_text.startswith("json"):
-                    result_text = result_text[4:]
-            result_text = result_text.strip()
-            
-            result = json.loads(result_text)
-            
-            return {
-                "id": question["id"],
-                "original_question": q_text,
-                "status": result.get("status", "valid"),
-                "is_valid": result.get("is_valid", True),
-                "question_text": result.get("question_text", q_text),
-                "options": result.get("options", options),
-                "correct_answer": result.get("correct_answer"),
-                "question_tr": result.get("question_tr", ""),
-                "explanation_tr": result.get("explanation_tr", ""),
-                "tested_skill": result.get("tested_skill", ""),
-                "difficulty": result.get("difficulty", "medium"),
-                "tip": result.get("tip", ""),
-                "processed": True,
-                "category": category
-            }
-            
-        except json.JSONDecodeError as e:
-            return {**question, "error": f"JSON parse error: {str(e)}", "processed": False}
-        except Exception as e:
-            return {**question, "error": str(e), "processed": False}
+    """Options'ı JSONB'den parse edip merkezi validate_question'a delege et"""
+    parsed_question = {**question, "options": parse_options_from_jsonb(question.get("options", []))}
+    return await _validate_question(parsed_question, category, semaphore)
 
 
 def ensure_schema():
