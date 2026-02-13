@@ -73,6 +73,14 @@ const openaiLimiter = rateLimit({
 
 app.use('/api/', generalLimiter);
 
+const feedbackLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 15,
+    message: { success: false, error: 'Çok fazla geri bildirim. 1 dakika sonra tekrar deneyin.' },
+    standardHeaders: true,
+    legacyHeaders: false
+});
+
 // PostgreSQL Connection
 const dbUrl = process.env.DATABASE_URL || '';
 const isLocalDb = dbUrl.includes('localhost') || dbUrl.includes('127.0.0.1');
@@ -199,6 +207,37 @@ async function initDatabase() {
             )
         `);
         
+        // Question feedback table (soru hatalı, cevap yanlış, kalitesiz, kategori yanlış)
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS question_feedback (
+                id SERIAL PRIMARY KEY,
+                question_hash VARCHAR(100) NOT NULL,
+                user_id INTEGER,
+                username VARCHAR(50),
+                feedback_type VARCHAR(30) NOT NULL,
+                comment TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(question_hash, user_id, feedback_type)
+            )
+        `);
+        
+        await pool.query(`CREATE INDEX IF NOT EXISTS idx_question_feedback_hash ON question_feedback(question_hash)`);
+        
+        // Question ratings table (beğenme/puan)
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS question_ratings (
+                id SERIAL PRIMARY KEY,
+                question_hash VARCHAR(100) NOT NULL,
+                user_id INTEGER,
+                username VARCHAR(50),
+                rating SMALLINT NOT NULL CHECK (rating BETWEEN 1 AND 5),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        
+        await pool.query(`CREATE INDEX IF NOT EXISTS idx_question_ratings_hash ON question_ratings(question_hash)`);
+        await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_question_ratings_unique ON question_ratings(question_hash, COALESCE(user_id, 0), COALESCE(username, ''))`);
+
         console.log('Database tables initialized');
     } catch (error) {
         console.error('Database initialization error:', error);
@@ -2240,6 +2279,223 @@ const ROOM_TEMPLATES = {
 
 app.get('/api/room-templates', (req, res) => {
     res.json({ success: true, templates: ROOM_TEMPLATES });
+});
+
+// ==================== QUESTION FEEDBACK & RATINGS ====================
+
+// Submit feedback for a question
+app.post('/api/questions/feedback', feedbackLimiter, optionalAuth, async (req, res) => {
+    try {
+        const { questionHash, feedbackType, comment, username } = req.body;
+        
+        if (!questionHash || !feedbackType) {
+            return res.status(400).json({ success: false, error: 'questionHash ve feedbackType gerekli' });
+        }
+        
+        if (typeof questionHash !== 'string' || questionHash.length > 100) {
+            return res.status(400).json({ success: false, error: 'Geçersiz questionHash' });
+        }
+        
+        if (comment && (typeof comment !== 'string' || comment.length > 500)) {
+            return res.status(400).json({ success: false, error: 'Yorum en fazla 500 karakter olabilir' });
+        }
+        
+        const validTypes = ['wrong_question', 'wrong_answer', 'low_quality', 'wrong_category', 'other'];
+        if (!validTypes.includes(feedbackType)) {
+            return res.status(400).json({ success: false, error: 'Geçersiz feedback türü' });
+        }
+        
+        const userId = req.user ? req.user.id : null;
+        const uname = req.user ? req.user.username : (username || 'Misafir');
+        
+        await pool.query(`
+            INSERT INTO question_feedback (question_hash, user_id, username, feedback_type, comment)
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (question_hash, user_id, feedback_type) DO UPDATE SET comment = $5, created_at = CURRENT_TIMESTAMP
+        `, [questionHash, userId, uname, feedbackType, comment || null]);
+        
+        res.json({ success: true, message: 'Geri bildirim kaydedildi' });
+    } catch (error) {
+        console.error('Submit feedback error:', error);
+        res.status(500).json({ success: false, error: 'Sunucu hatası' });
+    }
+});
+
+// Rate a question (1-5 stars)
+app.post('/api/questions/rate', feedbackLimiter, optionalAuth, async (req, res) => {
+    try {
+        const { questionHash, rating, username } = req.body;
+        
+        if (!questionHash || typeof questionHash !== 'string' || questionHash.length > 100) {
+            return res.status(400).json({ success: false, error: 'Geçersiz questionHash' });
+        }
+        
+        if (!rating || !Number.isInteger(rating) || rating < 1 || rating > 5) {
+            return res.status(400).json({ success: false, error: '1-5 arası tam sayı rating gerekli' });
+        }
+        
+        const userId = req.user ? req.user.id : null;
+        const uname = req.user ? req.user.username : (username || 'Misafir');
+        
+        await pool.query(`
+            INSERT INTO question_ratings (question_hash, user_id, username, rating)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (question_hash, COALESCE(user_id, 0), COALESCE(username, ''))
+            DO UPDATE SET rating = $4, created_at = CURRENT_TIMESTAMP
+        `, [questionHash, userId, uname, rating]);
+        
+        // Return updated average
+        const avgResult = await pool.query(`
+            SELECT ROUND(AVG(rating)::numeric, 1) as avg_rating, COUNT(*) as total_ratings
+            FROM question_ratings WHERE question_hash = $1
+        `, [questionHash]);
+        
+        res.json({
+            success: true,
+            avgRating: parseFloat(avgResult.rows[0].avg_rating) || 0,
+            totalRatings: parseInt(avgResult.rows[0].total_ratings) || 0
+        });
+    } catch (error) {
+        console.error('Rate question error:', error);
+        res.status(500).json({ success: false, error: 'Sunucu hatası' });
+    }
+});
+
+// Get question stats (rating + feedback count + community solve rate)
+app.get('/api/questions/stats/:hash', async (req, res) => {
+    try {
+        const { hash } = req.params;
+        
+        // Average rating
+        const ratingResult = await pool.query(`
+            SELECT ROUND(AVG(rating)::numeric, 1) as avg_rating, COUNT(*) as total_ratings
+            FROM question_ratings WHERE question_hash = $1
+        `, [hash]);
+        
+        // Feedback counts by type
+        const feedbackResult = await pool.query(`
+            SELECT feedback_type, COUNT(*) as count
+            FROM question_feedback WHERE question_hash = $1
+            GROUP BY feedback_type
+        `, [hash]);
+        
+        const feedbackCounts = {};
+        feedbackResult.rows.forEach(r => { feedbackCounts[r.feedback_type] = parseInt(r.count); });
+        
+        // Community first-attempt solve rate
+        // For each user, get only their FIRST attempt on this question
+        const solveResult = await pool.query(`
+            SELECT 
+                COUNT(*) as total_users,
+                SUM(CASE WHEN is_correct THEN 1 ELSE 0 END) as correct_users
+            FROM (
+                SELECT DISTINCT ON (user_id) user_id, is_correct
+                FROM user_answer_history
+                WHERE question_hash = $1 AND user_id IS NOT NULL
+                ORDER BY user_id, created_at ASC
+            ) first_attempts
+        `, [hash]);
+        
+        const totalUsers = parseInt(solveResult.rows[0].total_users) || 0;
+        const correctUsers = parseInt(solveResult.rows[0].correct_users) || 0;
+        const solveRate = totalUsers > 0 ? Math.round((correctUsers / totalUsers) * 100) : null;
+        
+        res.json({
+            success: true,
+            avgRating: parseFloat(ratingResult.rows[0].avg_rating) || 0,
+            totalRatings: parseInt(ratingResult.rows[0].total_ratings) || 0,
+            feedbackCounts,
+            totalFeedback: Object.values(feedbackCounts).reduce((a, b) => a + b, 0),
+            communityStats: {
+                totalUsers,
+                correctUsers,
+                solveRate
+            }
+        });
+    } catch (error) {
+        console.error('Get question stats error:', error);
+        res.status(500).json({ success: false, error: 'Sunucu hatası' });
+    }
+});
+
+// Get user's own rating for a question
+app.get('/api/questions/my-rating/:hash', optionalAuth, async (req, res) => {
+    try {
+        const { hash } = req.params;
+        const userId = req.user ? req.user.id : null;
+        
+        if (!userId) {
+            return res.json({ success: true, rating: null });
+        }
+        
+        const result = await pool.query(
+            'SELECT rating FROM question_ratings WHERE question_hash = $1 AND user_id = $2',
+            [hash, userId]
+        );
+        
+        res.json({ success: true, rating: result.rows[0]?.rating || null });
+    } catch (error) {
+        console.error('Get my rating error:', error);
+        res.status(500).json({ success: false, error: 'Sunucu hatası' });
+    }
+});
+
+// Batch get stats for multiple questions (for quiz loading)
+app.post('/api/questions/stats-batch', async (req, res) => {
+    try {
+        const { hashes } = req.body;
+        
+        if (!hashes || !Array.isArray(hashes) || hashes.length === 0) {
+            return res.json({ success: true, stats: {} });
+        }
+        
+        // Limit batch size
+        const limitedHashes = hashes.slice(0, 100);
+        
+        // Ratings
+        const ratingsResult = await pool.query(`
+            SELECT question_hash, ROUND(AVG(rating)::numeric, 1) as avg_rating, COUNT(*) as total_ratings
+            FROM question_ratings
+            WHERE question_hash = ANY($1)
+            GROUP BY question_hash
+        `, [limitedHashes]);
+        
+        // Community solve rates
+        const solveResult = await pool.query(`
+            SELECT question_hash,
+                COUNT(*) as total_users,
+                SUM(CASE WHEN is_correct THEN 1 ELSE 0 END) as correct_users
+            FROM (
+                SELECT DISTINCT ON (user_id, question_hash) user_id, question_hash, is_correct
+                FROM user_answer_history
+                WHERE question_hash = ANY($1) AND user_id IS NOT NULL
+                ORDER BY user_id, question_hash, created_at ASC
+            ) first_attempts
+            GROUP BY question_hash
+        `, [limitedHashes]);
+        
+        const stats = {};
+        
+        ratingsResult.rows.forEach(r => {
+            stats[r.question_hash] = {
+                avgRating: parseFloat(r.avg_rating) || 0,
+                totalRatings: parseInt(r.total_ratings) || 0
+            };
+        });
+        
+        solveResult.rows.forEach(r => {
+            const total = parseInt(r.total_users) || 0;
+            const correct = parseInt(r.correct_users) || 0;
+            if (!stats[r.question_hash]) stats[r.question_hash] = {};
+            stats[r.question_hash].solveRate = total > 0 ? Math.round((correct / total) * 100) : null;
+            stats[r.question_hash].totalUsers = total;
+        });
+        
+        res.json({ success: true, stats });
+    } catch (error) {
+        console.error('Batch stats error:', error);
+        res.status(500).json({ success: false, error: 'Sunucu hatası' });
+    }
 });
 
 // Export for Vercel serverless

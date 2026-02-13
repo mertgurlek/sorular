@@ -608,6 +608,16 @@ function showQuestion() {
         categoryBadge.textContent = q.category || '';
     }
 
+    // Load community stats & rating for this question
+    const qHash = hashQuestion(q.question_text);
+    loadQuestionCommunityStats(qHash);
+    
+    // Hide question actions (rating/feedback) until answered
+    const questionActionsEl = document.getElementById('questionActions');
+    if (questionActionsEl) questionActionsEl.classList.add('hidden');
+    const feedbackModalEl = document.getElementById('feedbackModal');
+    if (feedbackModalEl) feedbackModalEl.classList.add('hidden');
+
     // Show previous answer history if exists
     const questionHistory = getQuestionHistory(q);
     const historyIndicator = document.getElementById('historyIndicator');
@@ -992,6 +1002,13 @@ function selectAnswer(letter) {
         // if (!hasDbExplanation && typeof autoAddGPTExplanationOnWrong === 'function') {
         //     autoAddGPTExplanationOnWrong(q, letter);
         // }
+    }
+
+    // Show question actions (rating + feedback) after answering
+    const questionActionsEl = document.getElementById('questionActions');
+    if (questionActionsEl) {
+        questionActionsEl.classList.remove('hidden');
+        initQuestionRatingUI(hashQuestion(q.question_text));
     }
 
     // Auto-scroll to feedback inside question-container
@@ -4257,4 +4274,150 @@ function renderProgressBar(learned, total, pct) {
             <div class="kw-progress-pct">${pct}%</div>
         </div>
     `;
+}
+
+// ==================== QUESTION COMMUNITY STATS & RATING ====================
+
+async function loadQuestionCommunityStats(questionHash) {
+    const statsEl = document.getElementById('communityStats');
+    const rateEl = document.getElementById('communitySolveRate');
+    if (!statsEl || !rateEl) return;
+    
+    try {
+        const data = await window.API.Feedback.getQuestionStats(questionHash);
+        if (!data || data.communityStats.solveRate === null) {
+            statsEl.classList.add('hidden');
+            return;
+        }
+        
+        const rate = data.communityStats.solveRate;
+        const totalUsers = data.communityStats.totalUsers;
+        
+        let diffClass = 'medium';
+        if (rate >= 70) diffClass = 'easy';
+        else if (rate <= 40) diffClass = 'hard';
+        
+        rateEl.className = `community-solve-rate ${diffClass}`;
+        rateEl.innerHTML = `👥 %${rate} doğru <small>(${totalUsers} kişi)</small>`;
+        statsEl.classList.remove('hidden');
+    } catch (e) {
+        statsEl.classList.add('hidden');
+    }
+}
+
+function initQuestionRatingUI(questionHash) {
+    const starBtns = document.querySelectorAll('#starRating .star-btn');
+    const avgDisplay = document.getElementById('avgRatingDisplay');
+    
+    // Reset stars
+    starBtns.forEach(btn => {
+        btn.textContent = '☆';
+        btn.classList.remove('active', 'hover-active');
+    });
+    if (avgDisplay) avgDisplay.textContent = '';
+    
+    // Load existing rating
+    loadQuestionRating(questionHash, starBtns, avgDisplay);
+    
+    // Star hover effect
+    starBtns.forEach(btn => {
+        btn.onmouseenter = () => {
+            const rating = parseInt(btn.dataset.rating);
+            starBtns.forEach(s => {
+                s.classList.toggle('hover-active', parseInt(s.dataset.rating) <= rating);
+                s.textContent = parseInt(s.dataset.rating) <= rating ? '★' : '☆';
+            });
+        };
+        btn.onmouseleave = () => {
+            starBtns.forEach(s => {
+                s.classList.remove('hover-active');
+                s.textContent = s.classList.contains('active') ? '★' : '☆';
+            });
+        };
+        btn.onclick = () => submitQuestionRating(questionHash, parseInt(btn.dataset.rating), starBtns, avgDisplay);
+    });
+    
+    // Feedback button
+    const feedbackBtn = document.getElementById('feedbackBtn');
+    const feedbackModal = document.getElementById('feedbackModal');
+    const closeFeedbackModal = document.getElementById('closeFeedbackModal');
+    const submitFeedback = document.getElementById('submitFeedback');
+    
+    if (feedbackBtn) {
+        feedbackBtn.onclick = () => {
+            feedbackModal.classList.toggle('hidden');
+            // Reset form
+            document.querySelectorAll('input[name="feedbackType"]').forEach(r => r.checked = false);
+            document.getElementById('feedbackComment').value = '';
+        };
+    }
+    
+    if (closeFeedbackModal) {
+        closeFeedbackModal.onclick = () => feedbackModal.classList.add('hidden');
+    }
+    
+    if (submitFeedback) {
+        submitFeedback.onclick = () => submitQuestionFeedback(questionHash);
+    }
+}
+
+async function loadQuestionRating(questionHash, starBtns, avgDisplay) {
+    try {
+        const data = await window.API.Feedback.getQuestionStats(questionHash);
+        if (data && data.totalRatings > 0) {
+            avgDisplay.textContent = `${data.avgRating}★ (${data.totalRatings})`;
+        }
+        
+        // Load user's own rating
+        const myData = await window.API.Feedback.getMyRating(questionHash);
+        if (myData && myData.rating) {
+            starBtns.forEach(s => {
+                const isActive = parseInt(s.dataset.rating) <= myData.rating;
+                s.classList.toggle('active', isActive);
+                s.textContent = isActive ? '★' : '☆';
+            });
+        }
+    } catch (e) {
+        // Silently fail
+    }
+}
+
+async function submitQuestionRating(questionHash, rating, starBtns, avgDisplay) {
+    // Optimistic UI update
+    starBtns.forEach(s => {
+        const isActive = parseInt(s.dataset.rating) <= rating;
+        s.classList.toggle('active', isActive);
+        s.textContent = isActive ? '★' : '☆';
+    });
+    
+    try {
+        const data = await window.API.Feedback.rateQuestion(questionHash, rating);
+        if (data && data.totalRatings > 0) {
+            avgDisplay.textContent = `${data.avgRating}★ (${data.totalRatings})`;
+        }
+    } catch (e) {
+        console.error('Rating error:', e);
+    }
+}
+
+async function submitQuestionFeedback(questionHash) {
+    const selectedType = document.querySelector('input[name="feedbackType"]:checked');
+    if (!selectedType) {
+        alert('Lütfen bir sorun türü seçin');
+        return;
+    }
+    
+    const comment = document.getElementById('feedbackComment').value.trim();
+    
+    try {
+        await window.API.Feedback.submitFeedback(questionHash, selectedType.value, comment);
+        
+        // Show success
+        const feedbackModal = document.getElementById('feedbackModal');
+        feedbackModal.innerHTML = '<div style="text-align:center;padding:16px;color:var(--success);">✓ Geri bildiriminiz kaydedildi. Teşekkürler!</div>';
+        setTimeout(() => feedbackModal.classList.add('hidden'), 2000);
+    } catch (e) {
+        console.error('Feedback error:', e);
+        alert('Geri bildirim gönderilemedi');
+    }
 }

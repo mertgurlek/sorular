@@ -263,6 +263,50 @@ const GPTAPI = {
     }
 };
 
+// Question Feedback & Ratings API
+const FeedbackAPI = {
+    async submitFeedback(questionHash, feedbackType, comment) {
+        return apiRequest('/questions/feedback', {
+            method: 'POST',
+            body: { questionHash, feedbackType, comment }
+        });
+    },
+    
+    async rateQuestion(questionHash, rating) {
+        return apiRequest('/questions/rate', {
+            method: 'POST',
+            body: { questionHash, rating }
+        });
+    },
+    
+    async getQuestionStats(hash) {
+        try {
+            return await apiRequest(`/questions/stats/${hash}`);
+        } catch (e) {
+            return null;
+        }
+    },
+    
+    async getMyRating(hash) {
+        try {
+            return await apiRequest(`/questions/my-rating/${hash}`);
+        } catch (e) {
+            return null;
+        }
+    },
+    
+    async getBatchStats(hashes) {
+        try {
+            return await apiRequest('/questions/stats-batch', {
+                method: 'POST',
+                body: { hashes }
+            });
+        } catch (e) {
+            return { success: true, stats: {} };
+        }
+    }
+};
+
 // Export all APIs
 window.API = {
     URL: API_URL,
@@ -272,6 +316,7 @@ window.API = {
     Questions: QuestionsAPI,
     UserData: UserDataAPI,
     GPT: GPTAPI,
+    Feedback: FeedbackAPI,
     getAuthToken,
     setAuthToken,
     clearAuth

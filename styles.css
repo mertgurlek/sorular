@@ -3480,6 +3480,198 @@ body:not(.dark-mode) .icon-moon { display: none; }
     display: none;
 }
 
+/* Question meta row (category + community stats) */
+.question-meta-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 4px;
+}
+
+/* Community solve rate badge */
+.community-stats {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.community-solve-rate {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    background: rgba(108, 92, 231, 0.12);
+    color: var(--accent);
+    border: 1px solid rgba(108, 92, 231, 0.25);
+}
+
+.community-solve-rate.easy {
+    background: rgba(0, 206, 201, 0.12);
+    color: var(--success);
+    border-color: rgba(0, 206, 201, 0.25);
+}
+
+.community-solve-rate.medium {
+    background: rgba(253, 203, 110, 0.12);
+    color: #f39c12;
+    border-color: rgba(253, 203, 110, 0.3);
+}
+
+.community-solve-rate.hard {
+    background: rgba(255, 118, 117, 0.12);
+    color: var(--error);
+    border-color: rgba(255, 118, 117, 0.25);
+}
+
+/* ==================== QUESTION RATING & FEEDBACK ==================== */
+.question-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 12px;
+    padding: 10px 0;
+    border-top: 1px solid var(--border);
+    flex-wrap: wrap;
+}
+
+.question-rating {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.rating-label {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.star-rating {
+    display: flex;
+    gap: 2px;
+}
+
+.star-btn {
+    background: none;
+    border: none;
+    font-size: 1.4rem;
+    cursor: pointer;
+    padding: 2px;
+    transition: transform 0.15s, color 0.15s;
+    color: var(--text-secondary);
+    line-height: 1;
+}
+
+.star-btn.active,
+.star-btn.hover-active {
+    color: #ffd700;
+}
+
+@media (hover: hover) {
+    .star-btn:hover {
+        transform: scale(1.2);
+    }
+}
+
+.star-btn:active {
+    transform: scale(0.9);
+}
+
+.avg-rating {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.feedback-report-btn {
+    font-size: 0.8rem !important;
+    padding: 6px 12px !important;
+    white-space: nowrap;
+}
+
+/* Feedback Modal (inline, not overlay) */
+.feedback-modal {
+    margin-top: 10px;
+    padding: 14px;
+    background: var(--glass-bg);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    animation: fadeIn 0.2s ease-out;
+}
+
+.feedback-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.feedback-modal-close {
+    background: none;
+    border: none;
+    font-size: 1.1rem;
+    cursor: pointer;
+    color: var(--text-secondary);
+    padding: 4px;
+}
+
+.feedback-options {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+
+.feedback-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: background 0.15s;
+}
+
+.feedback-option:has(input:checked) {
+    background: rgba(108, 92, 231, 0.15);
+    color: var(--accent);
+}
+
+.feedback-option input[type="radio"] {
+    accent-color: var(--accent);
+}
+
+.feedback-comment {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--option-bg);
+    color: var(--text-primary);
+    font-size: 0.85rem;
+    resize: vertical;
+    min-height: 50px;
+    max-height: 120px;
+    margin-bottom: 8px;
+    font-family: inherit;
+}
+
+.feedback-comment:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
 /* ==================== ANSWER HISTORY INDICATOR ==================== */
 .history-indicator {
     margin-bottom: 12px;

@@ -234,7 +234,12 @@
                 </div>
 
                 <div id="questionContainer" class="question-container">
-                    <div id="questionCategory" class="question-category-badge"></div>
+                    <div class="question-meta-row">
+                        <div id="questionCategory" class="question-category-badge"></div>
+                        <div id="communityStats" class="community-stats hidden">
+                            <span class="community-solve-rate" id="communitySolveRate" title="Topluluk ilk seferde doğru çözme oranı"></span>
+                        </div>
+                    </div>
                     <div id="historyIndicator" class="history-indicator hidden"></div>
                     <div class="question-header">
                         <p id="questionText" class="question-text"></p>
@@ -253,6 +258,51 @@
 
                     <div id="feedback" class="feedback hidden">
                         <p id="feedbackText"></p>
+                    </div>
+
+                    <!-- Question Rating & Feedback -->
+                    <div id="questionActions" class="question-actions hidden">
+                        <div class="question-rating">
+                            <span class="rating-label">Soruyu puanla:</span>
+                            <div class="star-rating" id="starRating">
+                                <button class="star-btn" data-rating="1" title="1 yıldız">☆</button>
+                                <button class="star-btn" data-rating="2" title="2 yıldız">☆</button>
+                                <button class="star-btn" data-rating="3" title="3 yıldız">☆</button>
+                                <button class="star-btn" data-rating="4" title="4 yıldız">☆</button>
+                                <button class="star-btn" data-rating="5" title="5 yıldız">☆</button>
+                            </div>
+                            <span class="avg-rating" id="avgRatingDisplay"></span>
+                        </div>
+                        <button id="feedbackBtn" class="btn btn-secondary btn-small feedback-report-btn" title="Sorun Bildir">
+                            🚩 Sorun Bildir
+                        </button>
+                    </div>
+
+                    <!-- Feedback Modal -->
+                    <div id="feedbackModal" class="feedback-modal hidden">
+                        <div class="feedback-modal-header">
+                            <span>Sorun Bildir</span>
+                            <button id="closeFeedbackModal" class="feedback-modal-close">✕</button>
+                        </div>
+                        <div class="feedback-options">
+                            <label class="feedback-option">
+                                <input type="radio" name="feedbackType" value="wrong_question"> Soru hatalı
+                            </label>
+                            <label class="feedback-option">
+                                <input type="radio" name="feedbackType" value="wrong_answer"> Doğru cevap yanlış
+                            </label>
+                            <label class="feedback-option">
+                                <input type="radio" name="feedbackType" value="low_quality"> Soru kalitesiz
+                            </label>
+                            <label class="feedback-option">
+                                <input type="radio" name="feedbackType" value="wrong_category"> Kategori yanlış
+                            </label>
+                            <label class="feedback-option">
+                                <input type="radio" name="feedbackType" value="other"> Diğer
+                            </label>
+                        </div>
+                        <textarea id="feedbackComment" class="feedback-comment" placeholder="Ek açıklama (isteğe bağlı)" maxlength="500"></textarea>
+                        <button id="submitFeedback" class="btn btn-primary btn-small">Gönder</button>
                     </div>
                 </div>
 
