@@ -3,6 +3,20 @@
 
 // Helpers are loaded globally from src/utils/helpers.js (parseOptions, buildExplanationHtml, shuffleArray, etc.)
 
+// ==================== VIEWPORT HEIGHT FIX ====================
+// Mobile browsers have dynamic toolbars that change viewport height.
+// This measures the real visible area and sets CSS custom properties.
+function setViewportHeight() {
+    const vh = window.innerHeight * 0.01;
+    document.documentElement.style.setProperty('--vh', `${vh}px`);
+    document.documentElement.style.setProperty('--app-height', `${window.innerHeight}px`);
+}
+setViewportHeight();
+window.addEventListener('resize', setViewportHeight);
+window.addEventListener('orientationchange', () => {
+    setTimeout(setViewportHeight, 150);
+});
+
 // Current User State
 let currentUser = null;
 
